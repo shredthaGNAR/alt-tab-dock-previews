@@ -25,7 +25,7 @@ class Appearance {
     // theme
     static var fontColor = NSColor.red
     static var imagesShadowColor = NSColor.red // for icon, thumbnail and windowless images
-    static var material = NSVisualEffectView.Material.ultraDark
+    static var material = LegacyMaterial.ultraDark
     static var highlightBorderWidth = CGFloat(3)
 
     // theme: constants
@@ -41,7 +41,7 @@ class Appearance {
     private static var currentSize: AppearanceSizePreference { Preferences.appearanceSize }
     static var currentTheme: AppearanceThemePreference {
         if Preferences.appearanceTheme == .system {
-            return NSAppearance.current.getThemeName()
+            return NSAppearance.currentDrawing().getThemeName()
         } else {
             return Preferences.appearanceTheme
         }
@@ -193,12 +193,22 @@ class Appearance {
     private static func lightTheme() {
         fontColor = .black.withAlphaComponent(0.8)
         imagesShadowColor = .gray.withAlphaComponent(0.8)
-        material = .mediumLight
+        material = LegacyMaterial.mediumLight
     }
 
     private static func darkTheme() {
         fontColor = .white.withAlphaComponent(0.85)
         imagesShadowColor = .gray.withAlphaComponent(0.8)
-        material = .dark
+        material = LegacyMaterial.dark
     }
+}
+
+/// The only `NSVisualEffectView.Material` values that pin light or dark explicitly. Deprecated in
+/// 10.14 in favour of semantic materials, which we can't use: those follow the view's
+/// `NSAppearance`, whereas our theme comes from the user's own preference (see `updateTheme`).
+/// Referenced by rawValue because naming the cases trips `SWIFT_TREAT_WARNINGS_AS_ERRORS`.
+enum LegacyMaterial {
+    static let dark = NSVisualEffectView.Material(rawValue: 2)!
+    static let mediumLight = NSVisualEffectView.Material(rawValue: 8)!
+    static let ultraDark = NSVisualEffectView.Material(rawValue: 9)!
 }

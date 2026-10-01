@@ -1,4 +1,5 @@
 import Cocoa
+import UniformTypeIdentifiers
 
 class ExceptionsTab {
     static func initTab() -> NSView {
@@ -68,7 +69,7 @@ class ExceptionsTab {
         guard let tableView = sender.representedObject as? TableView else { return }
         let dialog = NSOpenPanel()
         dialog.allowsMultipleSelection = false
-        dialog.allowedFileTypes = ["app"]
+        dialog.allowedContentTypes = [.application]
         dialog.canChooseDirectories = false
         dialog.beginSheetModal(for: SettingsWindow.shared) {
             if $0 == .OK, let url = dialog.url, let bundleId = Bundle(url: url)?.bundleIdentifier {
