@@ -6,18 +6,11 @@ import ApplicationServices.HIServices.AXRoleConstants
 import ApplicationServices.HIServices.AXAttributeConstants
 import ApplicationServices.HIServices.AXActionConstants
 
-/// common, subscriptions, concurrency
+/// common, subscriptions
 extension AXUIElement {
     // default timeout for AX calls is 6s
     // we reduce to 1s to avoid AX calls blocking threads, thus too many threads getting created to make the next AX calls
     private static let globalMessagingTimeoutInSeconds = Float(1)
-    // if an app times out our AX calls, we retry for 6s then give up
-    private static let axCallsRetriesQueueTimeoutInSeconds = Float(6)
-    // once an app is unresponsive, let's ignore other AX calls for it to avoid congestion
-    private static var axCallsRetriesQueueUnresponsiveAppsMap = ConcurrentMap<String, UInt64>()
-    // some events like window resizing trigger in quick succession. We debounce those
-    private static var eventsDebounceMap = ConcurrentMap<String, DispatchWorkItem>()
-
     static func setGlobalTimeout() {
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), globalMessagingTimeoutInSeconds)
     }
@@ -28,74 +21,6 @@ extension AXUIElement {
             throw AxError.runtimeError
         }
         // for success or other errors we don't throw
-    }
-
-    /// if the window server is busy, it may not reply to AX calls. We retry right before the call times-out and returns a bogus value
-    static func retryAxCallUntilTimeout(file: String = #file, function: String = #function, line: Int = #line, context: String = "", after: DispatchTime? = nil, debounceType: DebounceType? = nil, pid: pid_t? = nil, wid: CGWindowID? = nil, retriesQueue: Bool = false, startTimeInNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds, callType: AXCallType, block: @escaping () throws -> Void) {
-        let closure = { retryAxCallUntilTimeout_(file: file, function: function, line: line, context: context, after: after, debounceType: debounceType, pid: pid, wid: wid, retriesQueue: retriesQueue, startTimeInNanoseconds: startTimeInNanoseconds, callType: callType, block: block) }
-        let queue = callType == .updateAppWindows ? BackgroundWork.axCallsManualDiscoveryQueue : (retriesQueue ? BackgroundWork.axCallsRetriesQueue : BackgroundWork.axCallsFirstAttemptQueue)
-        if let after {
-            queue!.addOperationAfter(deadline: after, block: closure)
-        } else if let debounceType, let wid {
-            let debounceMapKey = "\(debounceType.rawValue)\(wid)"
-            let workItem = DispatchWorkItem {
-                closure()
-                eventsDebounceMap.withLock { $0[debounceMapKey] = nil }
-            }
-            eventsDebounceMap.withLock {
-                $0[debounceMapKey]?.cancel()
-                $0[debounceMapKey] = workItem
-            }
-            queue!.addOperationAfter(deadline: .now() + humanPerceptionDelay) {
-                workItem.perform()
-            }
-        } else {
-            queue!.addOperation(closure)
-        }
-    }
-
-    private static func retryAxCallUntilTimeout_(file: String, function: String, line: Int, context: String, after: DispatchTime?, debounceType: DebounceType?, pid: pid_t?, wid: CGWindowID?, retriesQueue: Bool, startTimeInNanoseconds: UInt64, callType: AXCallType, block: @escaping () throws -> Void) {
-        // attempt the AX call
-        if (try? block()) != nil {
-            return
-        }
-        // do we already have ongoing retries for this pid? The app is likely unresponsive
-        // if their are common updates, we avoid congestion by only retrying the latest update
-        if let pid, callType == .updateWindow || callType == .updateAppWindows {
-            let unresponsiveAppsMapKey = "\(callType.rawValue)\(pid)"
-            let time = axCallsRetriesQueueUnresponsiveAppsMap.withLock { $0[unresponsiveAppsMapKey] }
-            if let time {
-                if startTimeInNanoseconds > time {
-                    // new most recent call; replace and retry
-                    axCallsRetriesQueueUnresponsiveAppsMap.withLock { $0[unresponsiveAppsMapKey] = startTimeInNanoseconds }
-                } else if startTimeInNanoseconds == time {
-                    // most recent call; retry
-                } else {
-                    // old call which has been replaced; ignore
-                    return
-                }
-            } else {
-                // first call; set and retry
-                axCallsRetriesQueueUnresponsiveAppsMap.withLock { $0[unresponsiveAppsMapKey] = startTimeInNanoseconds }
-            }
-        }
-        // should we give up?
-        let timePassedInSeconds = Float(DispatchTime.now().uptimeNanoseconds - startTimeInNanoseconds) / 1_000_000_000
-        if timePassedInSeconds >= axCallsRetriesQueueTimeoutInSeconds {
-            Logger.info { "AX call failed for more than \(Int(axCallsRetriesQueueTimeoutInSeconds))s. Giving up on it. \(logFromContext(file, function, line, context, callType))" }
-            if let pid, callType == .updateWindow || callType == .updateAppWindows {
-                let unresponsiveAppsMapKey = "\(callType.rawValue)\(pid)"
-                axCallsRetriesQueueUnresponsiveAppsMap.withLock { $0.removeValue(forKey: unresponsiveAppsMapKey) }
-            }
-            return
-        }
-        // retry
-        Logger.debug { "(pid:\(pid) wid:\(wid)) \(logFromContext(file, function, line, context, callType))" }
-        retryAxCallUntilTimeout(file: file, function: function, line: line, context: context, after: .now() + humanPerceptionDelay, debounceType: debounceType, pid: pid, wid: wid, retriesQueue: true, startTimeInNanoseconds: startTimeInNanoseconds, callType: callType, block: block)
-    }
-
-    private static func logFromContext(_ file: String, _ function: String, _ line: Int, _ context: String, _ callType: AXCallType) -> String {
-        return "Context: \((file as NSString).lastPathComponent):\(line) \(function) \(String(describing: callType)) \(context)"
     }
 
     @discardableResult
@@ -110,28 +35,6 @@ extension AXUIElement {
         }
         // temporary issue; subscription may succeed if retried
         throw AxError.runtimeError
-    }
-
-    enum AXCallType: Int {
-        case subscribeToAppNotification
-        case subscribeToWindowNotification
-        case subscribeToDockNotification
-        case updateWindow
-        case updateAppWindows
-        case updateDockBadges
-        case axEventEntrypoint
-    }
-
-    final class ConcurrentMap<K: Hashable, V> {
-        private var map = [K: V]()
-        private let lock = NSLock()
-
-        @discardableResult
-        func withLock<T>(_ block: (inout [K: V]) -> T) -> T {
-            lock.lock()
-            defer { lock.unlock() }
-            return block(&map)
-        }
     }
 }
 
@@ -286,6 +189,24 @@ extension AXUIElement {
     func performAction(_ action: String) throws {
         try throwIfNotSuccess(AXUIElementPerformAction(self, action as CFString))
     }
+
+    /// Query the window's AXTabGroup child to detect OS-level tabs.
+    /// Returns tab titles if the window has tabs (always ≥ 2), nil otherwise.
+    /// `children` should come from the prior `.attributes([..., kAXChildrenAttribute])` call.
+    static func tabGroupInfo(_ children: [AXUIElement]?) -> [String]? {
+        guard let children else { return nil }
+        for child in children {
+            let a = try? child.attributes([kAXRoleAttribute, kAXChildrenAttribute])
+            guard a?.role == "AXTabGroup", let tabChildren = a?.children else { continue }
+            let titles = tabChildren.compactMap { tab -> String? in
+                let t = try? tab.attributes([kAXSubroleAttribute, kAXTitleAttribute])
+                guard t?.subrole == "AXTabButton" else { return nil }
+                return t?.title ?? ""
+            }
+            return titles.count >= 2 ? titles : nil
+        }
+        return nil
+    }
 }
 
 /// tests have shown that this ID has a range going from 0 to probably UInt.MAX
@@ -315,9 +236,4 @@ struct AXAttributes {
     var windows: [AXUIElement]?
     var position: CGPoint?
     var size: CGSize?
-}
-
-enum DebounceType: Int {
-    case windowResizedOrMoved
-    case windowTitleChanged
 }

@@ -7,14 +7,14 @@ func DockAltTabThumbnailPreviewRequestHD(window: Window) {
     DockAltTabWaitForWindow = window.cgWindowId!
     DispatchQueue.main.async {
         if DockAltTabWaitForWindow != window.cgWindowId { return } // WaitForWindow changed, don't get this thumbnail then
-        Windows.refreshThumbnailsAsync([window], .refreshUiAfterThumbnailsHaveBeenRefreshed)
+        Windows.refreshThumbnailsAsync([window], .refreshUiAfterExternalEvent)
     }
 
 }
 class thumbnailPreviewScriptCommand: NSScriptCommand {
     override func performDefaultImplementation() -> Any? {
         let selectedWin = Windows.selectedWindow()
-        if (!App.app.appIsBeingUsed || selectedWin == nil) { return self }
+        if (!App.appIsBeingUsed || selectedWin == nil) { return self }
 //        print("thumbnailPreviewScriptCommand: " + selectedWin!.title)
         DockAltTabThumbnailPreviewRequestHD(window: selectedWin!)
         Windows.previewSelectedWindowIfNeeded()

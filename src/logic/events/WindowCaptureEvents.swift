@@ -9,10 +9,13 @@ class WindowCaptureScreenshots {
     static func oneTimeScreenshots(_ windowsToScreenshot: [Window], _ source: RefreshCausedBy) {
         let windows = windowsToScreenshot.compactMap { $0.cgWindowId }
         guard !windows.isEmpty else { return }
-        let (cachedWindows, notCachedWindows) = sortCachedAndNotCached(windows)
-        Logger.debug { "cached:\(cachedWindows.map { $0.windowID }) notCached:\(notCachedWindows)" }
-        handleCachedWindows(cachedWindows, source)
-        handleNotCachedWindows(notCachedWindows, source)
+        BackgroundWork.screenshotsQueue.addOperation {
+            guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
+            let (cachedWindows, notCachedWindows) = sortCachedAndNotCached(windows)
+            Logger.debug { "cached:\(cachedWindows.map { $0.windowID }) notCached:\(notCachedWindows)" }
+            handleCachedWindows(cachedWindows, source)
+            handleNotCachedWindows(notCachedWindows, source)
+        }
     }
 
     private static func handleCachedWindows(_ cachedWindows: [SCWindow], _ source: RefreshCausedBy) {
@@ -26,16 +29,16 @@ class WindowCaptureScreenshots {
         guard !notCachedWindows.isEmpty else { return }
         SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: false) { shareableContent, error in
             guard let shareableContent, error == nil else { Logger.error { "\(shareableContent == nil) \(error)" }; return }
-            guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+            guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
             // this callback is executed on an undetermined queue; we move execution to main-thread
-            DispatchQueue.main.async {
+            BackgroundWork.screenshotsQueue.addOperation {
                 cachedSCWindows = shareableContent.windows
-                guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+                guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
                 for notCachedWindow in notCachedWindows {
                     if let cachedWindow = (cachedSCWindows.first { $0.windowID == notCachedWindow }) {
                         oneTimeCapture(cachedWindow, source)
                     } else {
-                        Logger.error { "wid:\(notCachedWindow) was not found in SCShareableContent windows" }
+                        Logger.debug { "wid:\(notCachedWindow) was not found in SCShareableContent windows" }
                     }
                 }
             }
@@ -56,18 +59,20 @@ class WindowCaptureScreenshots {
     }
 
     private static func oneTimeCapture(_ scWindow: SCWindow, _ source: RefreshCausedBy) {
-        guard !App.app.isTerminating, let window = (Windows.list.first { $0.cgWindowId == scWindow.windowID }), window.size != nil else { return }
+        guard !App.isTerminating, let window = (Windows.list.first { $0.cgWindowId == scWindow.windowID }), window.size != nil else { return }
         let config = SCStreamConfiguration.forWindow(scWindow, window, false)
         let filter = SCContentFilter(desktopIndependentWindow: scWindow)
         ActiveWindowCaptures.increment()
-        SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) { cgImage, error in
+        SCScreenshotManager.captureSampleBuffer(contentFilter: filter, configuration: config) { sampleBuffer, error in
             ActiveWindowCaptures.decrement()
-            guard let cgImage, error == nil else { Logger.error { "\(window.debugId()) \(cgImage == nil) \(error)" }; return }
-            guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+            guard let sampleBuffer, error == nil else { Logger.error { "\(window.debugId) \(sampleBuffer == nil) \(error)" }; return }
+            guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
+            let pixelBuffer: CVPixelBuffer? = sampleBuffer.pixelBuffer() ?? sampleBuffer.imageBuffer
+            guard let pixelBuffer else { Logger.error { "\(window.debugId) no pixelBuffer" }; return }
             DispatchQueue.main.async {
-                guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+                guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
                 if let window = (Windows.list.first { $0.cgWindowId == scWindow.windowID }) {
-                    window.refreshThumbnail(.cgImage(cgImage))
+                    window.refreshThumbnail(.pixelBuffer(pixelBuffer))
                 }
             }
         }
@@ -78,11 +83,11 @@ class WindowCaptureScreenshotsPrivateApi {
     static func oneTimeScreenshots(_ eligibleWindows: [Window], _ source: RefreshCausedBy) {
         for window in eligibleWindows {
             BackgroundWork.screenshotsQueue.addOperation { [weak window] in
-                guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+                guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
                 guard let wid = window?.cgWindowId, let cgImage = oneTimeCapture(wid) else { return }
-                guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+                guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
                 DispatchQueue.main.async { [weak window] in
-                    guard source != .refreshOnlyThumbnailsAfterShowUi || App.app.appIsBeingUsed else { return }
+                    guard source != .refreshOnlyThumbnailsAfterShowUi || App.appIsBeingUsed else { return }
                     window?.refreshThumbnail(.cgImage(cgImage))
                 }
             }
@@ -90,7 +95,7 @@ class WindowCaptureScreenshotsPrivateApi {
     }
 
     private static func oneTimeCapture(_ wid: CGWindowID) -> CGImage? {
-        guard !App.app.isTerminating else { return nil }
+        guard !App.isTerminating else { return nil }
         // we use CGSHWCaptureWindowList because it can screenshot minimized windows, which CGWindowListCreateImage can't
         var windowId_ = wid
         ActiveWindowCaptures.increment()
@@ -124,7 +129,7 @@ class WindowCaptureScreenshotsPrivateApi {
 //                 // this callback is executed on an undetermined queue
 //                 // we move execution to main-thread to avoid races with starting/stopping streams and the app being shown/hidden
 //                 DispatchQueue.main.async {
-//                     guard App.app.appIsBeingUsed else { return }
+//                     guard App.appIsBeingUsed else { return }
 //                     startCaptures(windowsToStart, shareableContent)
 //                     updateCaptures(windowsWhichMayHaveChanged_, shareableContent)
 //                     Logger.debug { streams.keys }
@@ -229,6 +234,7 @@ extension SCStreamConfiguration {
     static func forWindow(_ scWindow: SCWindow, _ window: Window, _ video: Bool) -> SCStreamConfiguration {
         let config = SCStreamConfiguration()
         config.setWindowSize(scWindow, window)
+        config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = false
         // if video {
         //     config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(60))
@@ -264,9 +270,9 @@ extension SCStreamConfiguration {
             height = Int(originalSize.height)
         } else {
             // capture screenshots as small as needed for the thumbnails
-            let maxSize = ThumbnailsPanel.maxPossibleThumbnailSize
+            let maxSize = TilesPanel.maxPossibleThumbnailSize
             guard maxSize.width > 0, maxSize.height > 0 else { return }
-            let scale = min(maxSize.width / originalSize.width, maxSize.height / originalSize.height)
+            let scale = min(1.0, maxSize.width / originalSize.width, maxSize.height / originalSize.height)
             width = Int((originalSize.width * scale).rounded())
             height = Int((originalSize.height * scale).rounded())
         }
@@ -301,25 +307,9 @@ extension CMSampleBuffer {
 }
 
 class ActiveWindowCaptures {
-    private static var count: Int = 0
-    private static let semaphore = DispatchSemaphore(value: 1)
+    private static var _count: Int32 = 0
 
-    static func increment() {
-        semaphore.wait()
-        count += 1
-        semaphore.signal()
-    }
-
-    static func decrement() {
-        semaphore.wait()
-        count -= 1
-        semaphore.signal()
-    }
-
-    static func value() -> Int {
-        semaphore.wait()
-        let current = count
-        semaphore.signal()
-        return current
-    }
+    static func increment() { OSAtomicIncrement32(&_count) }
+    static func decrement() { OSAtomicDecrement32(&_count) }
+    static func value() -> Int { Int(OSAtomicAdd32(0, &_count)) }
 }

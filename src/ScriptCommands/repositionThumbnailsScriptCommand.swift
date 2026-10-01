@@ -8,7 +8,7 @@ class repositionThumbnailsScriptCommand: NSScriptCommand {
             position.count >= 2
         else { return self }
 
-        if App.app.thumbnailsPanel.isVisible == false { return self }
+        if TilesPanel.shared.isVisible == false { return self }
 
         let targetX = position[0].intValue
         let targetY = position[1].intValue
@@ -34,7 +34,7 @@ class repositionThumbnailsScriptCommand: NSScriptCommand {
             DockAltTabFORCEDX = Int(newX)
             DockAltTabFORCEDY = Int(newY)
 
-            App.app.thumbnailsPanel.screen?.repositionPanel(App.app.thumbnailsPanel)
+            TilesPanel.shared.screen?.repositionPanel(TilesPanel.shared)
 
             if progress >= 1.0 {
                 timer.invalidate()

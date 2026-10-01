@@ -19,11 +19,11 @@ class countWindowsScriptCommand: NSScriptCommand {
         Windows.list.forEach { (window: Window) in // follow refreshWhichWindowsToShowTheUser
             if (
 //                !(window.application.runningApplication.bundleIdentifier.flatMap { id in Preferences.dontShowBlacklist.contains { id.hasPrefix($0) } } ?? false) &&
-                !(/* Preferences.appsToShow[App.app.shortcutIndex] == .active && */ window.application.runningApplication.processIdentifier != tarApp.processIdentifier) /*&&*/ // -and change line: (active app) pid ==> (target app) pid
+                !(/* Preferences.appsToShow[App.shortcutIndex] == .active && */ window.application.runningApplication.processIdentifier != tarApp.processIdentifier) /*&&*/ // -and change line: (active app) pid ==> (target app) pid
 //                    && ((!Preferences.hideWindowlessApps && window.isWindowlessApp) ||
                     
 //                    !window.isWindowlessApp &&
-//                    !(Preferences.spacesToShow[App.app.shortcutIndex] == .visible && !Spaces.visibleSpaces.contains(window.spaceId)) &&
+//                    !(Preferences.spacesToShow[App.shortcutIndex] == .visible && !Spaces.visibleSpaces.contains(window.spaceId)) &&
 //                    (Preferences.showTabsAsWindows || !window.isTabbed))
             ) {winCount += 1}
         }

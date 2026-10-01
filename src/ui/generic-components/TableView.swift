@@ -1,19 +1,59 @@
 import Cocoa
 
-class BlacklistView: NSScrollView {
-    convenience init() {
-        self.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        borderType = .bezelBorder
-        hasHorizontalScroller = false
-        hasVerticalScroller = true
-        documentView = TableView(nil)
-        fit(500, 378)
+class ForwardingVerticalScrollView: NSScrollView {
+    override func wantsForwardedScrollEvents(for axis: NSEvent.GestureAxis) -> Bool {
+        axis == .vertical
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard isVerticalScroll(event) else {
+            super.scrollWheel(with: event)
+            return
+        }
+        let bounds = contentView.bounds
+        let y = bounds.origin.y
+        // Ask AppKit for the actual valid scroll range (accounts for headers, insets, etc.)
+        let minY = contentView.constrainBoundsRect(NSRect(x: bounds.origin.x, y: -1e9, width: bounds.width, height: bounds.height)).origin.y
+        let maxY = contentView.constrainBoundsRect(NSRect(x: bounds.origin.x, y: 1e9, width: bounds.width, height: bounds.height)).origin.y
+        let canScrollUp = y > minY + 0.5
+        let canScrollDown = y < maxY - 0.5
+        // scrollingDeltaY > 0 → scroll up (y decreases); < 0 → scroll down (y increases)
+        let wantsUp = event.scrollingDeltaY > 0
+        let wantsDown = event.scrollingDeltaY < 0
+        let shouldForward = (wantsUp && !canScrollUp) || (wantsDown && !canScrollDown)
+        if shouldForward {
+            parentScrollView()?.scrollWheel(with: event)
+        } else {
+            super.scrollWheel(with: event)
+        }
+    }
+
+    private func isVerticalScroll(_ event: NSEvent) -> Bool {
+        abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX) && abs(event.scrollingDeltaY) > 0.1
+    }
+
+    private func parentScrollView() -> NSScrollView? {
+        var parent = superview
+        while let view = parent {
+            if let scrollView = view as? NSScrollView { return scrollView }
+            parent = view.superview
+        }
+        return nil
+    }
+}
+
+class ForwardingVerticalDocumentView: FlippedView {
+    override func wantsForwardedScrollEvents(for axis: NSEvent.GestureAxis) -> Bool {
+        axis == .vertical
     }
 }
 
 class TableView: NSTableView {
-    var items = Preferences.blacklist
+    var items = Preferences.exceptions
+
+    override func wantsForwardedScrollEvents(for axis: NSEvent.GestureAxis) -> Bool {
+        axis == .vertical
+    }
 
     convenience init(_: Int?) {
         self.init()
@@ -29,6 +69,7 @@ class TableView: NSTableView {
         addHeaders([
             NSLocalizedString("App (BundleID starting with)", comment: ""),
             String(format: NSLocalizedString("Hide in %@", comment: "%@ is AltTab"), App.name),
+            NSLocalizedString("Window title contains", comment: ""),
             NSLocalizedString("Ignore shortcuts when active", comment: "")
         ])
         reloadData()
@@ -36,7 +77,7 @@ class TableView: NSTableView {
 
     func insertRow(_ bundleId: String) {
         if !(items.contains { $0.bundleIdentifier == bundleId }) {
-            items.append(BlacklistEntry(bundleIdentifier: bundleId, hide: .always, ignore: .none))
+            items.append(ExceptionEntry(bundleIdentifier: bundleId, hide: .always, ignore: .none, windowTitleContains: nil))
             insertRows(at: [numberOfRows])
             savePreferences()
         }
@@ -58,7 +99,7 @@ class TableView: NSTableView {
             column.headerToolTip = header
             column.headerCell = TableHeaderCell(header)
             if i == 0 {
-                column.width = 206
+                column.width = 180
             }
             addTableColumn(column)
         }
@@ -69,19 +110,21 @@ class TableView: NSTableView {
         if colId == "col1" {
             items[row].bundleIdentifier = LabelAndControl.getControlValue(control, nil)!
         } else if colId == "col2" {
-            items[row].hide = BlacklistHidePreference.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
+            items[row].hide = ExceptionHidePreference.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
+        } else if colId == "col3" {
+            items[row].windowTitleContains = LabelAndControl.getControlValue(control, nil)
         } else {
-            items[row].ignore = BlacklistIgnorePreference.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
+            items[row].ignore = ExceptionIgnorePreference.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
         }
         savePreferences()
     }
 
     private func savePreferences() {
-        Preferences.set("blacklist", items)
+        Preferences.set("exceptions", items)
     }
 
-    private func text(_ item: BlacklistEntry) -> NSView {
-        let text = TextField(item.bundleIdentifier)
+    private func editableTextCell(_ value: String, _ colId: String) -> NSView {
+        let text = TextField(value)
         text.isEditable = true
         text.allowsExpansionToolTips = true
         text.drawsBackground = false
@@ -89,7 +132,7 @@ class TableView: NSTableView {
         text.lineBreakMode = .byTruncatingTail
         text.usesSingleLineMode = true
         text.cell!.sendsActionOnEndEditing = true
-        text.onAction = { self.wasUpdated("col1", $0) }
+        text.onAction = { self.wasUpdated(colId, $0) }
         let parent = NSView()
         parent.addSubview(text)
         text.centerYAnchor.constraint(equalTo: parent.centerYAnchor).isActive = true
@@ -97,20 +140,33 @@ class TableView: NSTableView {
         return parent
     }
 
-    private func dropdown(_ item: BlacklistEntry, _ colId: String) -> NSView {
+    private func text(_ item: ExceptionEntry) -> NSView {
+        editableTextCell(item.bundleIdentifier, "col1")
+    }
+
+    private func titleText(_ item: ExceptionEntry) -> NSView {
+        editableTextCell(item.windowTitleContains ?? "", "col3")
+    }
+
+    private func dropdown(_ item: ExceptionEntry, _ colId: String) -> NSView {
         let isHidePref = colId == "col2"
         let button = NSPopUpButton()
         button.translatesAutoresizingMaskIntoConstraints = false
         button.allowsExpansionToolTips = true
         button.lineBreakMode = .byTruncatingTail
-        let cases: [MacroPreference] = isHidePref ? BlacklistHidePreference.allCases : BlacklistIgnorePreference.allCases
+        let cell = button.cell as! NSPopUpButtonCell
+        cell.bezelStyle = .regularSquare
+        cell.arrowPosition = .arrowAtBottom
+        cell.imagePosition = .imageOverlaps
+        let cases: [MacroPreference] = isHidePref ? ExceptionHidePreference.allCases : ExceptionIgnorePreference.allCases
         button.addItems(withTitles: cases.map { $0.localizedString })
         button.selectItem(at: isHidePref ? item.hide.index : item.ignore.index)
         button.onAction = { self.wasUpdated(colId, $0) }
         let parent = NSView()
         parent.addSubview(button)
+        button.leadingAnchor.constraint(equalTo: parent.leadingAnchor).isActive = true
         button.centerYAnchor.constraint(equalTo: parent.centerYAnchor).isActive = true
-        button.widthAnchor.constraint(equalTo: parent.widthAnchor).isActive = true
+        button.widthAnchor.constraint(lessThanOrEqualTo: parent.widthAnchor).isActive = true
         return parent
     }
 }
@@ -124,7 +180,14 @@ extension TableView: NSTableViewDataSource {
 extension TableView: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let item = items[row]
-        return tableColumn!.identifier.rawValue == "col1" ? text(item) : dropdown(item, tableColumn!.identifier.rawValue)
+        let colId = tableColumn!.identifier.rawValue
+        if colId == "col1" {
+            return text(item)
+        } else if colId == "col3" {
+            return titleText(item)
+        } else {
+            return dropdown(item, colId)
+        }
     }
 }
 

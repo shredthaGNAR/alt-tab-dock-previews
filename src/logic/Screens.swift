@@ -5,8 +5,9 @@ class Screens {
 
     static func refresh() {
         all.removeAll()
+        NSScreen.clearUuidCache()
         for screen in NSScreen.screens {
-            guard let uuid = screen.uuid() else { continue }
+            guard let uuid = screen.cachedUuid() else { continue }
             all[uuid] = screen
         }
     }
@@ -14,6 +15,7 @@ class Screens {
 
 extension NSScreen {
     static var preferred = NSScreen.screens.first!
+    private static var uuidCache = [ObjectIdentifier: ScreenUuid]()
 
     static func updatePreferred() {
         preferred = detectPreferred() ?? NSScreen.screens.first!
@@ -34,7 +36,7 @@ extension NSScreen {
     ///   * if NSScreen.screensHaveSeparateSpaces == false, and key window is on another screen than screens[0], it still returns screens[0]
     /// we find the screen with the key window ourselves manually
     static func active() -> NSScreen? {
-        guard let frontmostPid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+        guard let frontmostPid = Applications.frontmostPid,
               // we avoid Applications.findOrCreate() here, because it active() is called very early during launch
               // we are not ready to create applications yet
               let frontmostApp = (Applications.list.first { $0.pid == frontmostPid }) else { return nil }
@@ -47,7 +49,7 @@ extension NSScreen {
 
     /// there is only 1 active menubar. Other screens will show their menubar dimmed
     static func withActiveMenubar() -> NSScreen? {
-        return NSScreen.screens.first { CGSCopyActiveMenuBarDisplayIdentifier(CGS_CONNECTION) == $0.uuid() }
+        return NSScreen.screens.first { CGSCopyActiveMenuBarDisplayIdentifier(CGS_CONNECTION) == $0.cachedUuid() }
     }
 
     static func withMouse() -> NSScreen? {
@@ -71,6 +73,18 @@ extension NSScreen {
         // these APIs implicitly unwrap their return values, but it can actually be nil thus we check
         let screenUuid = CGDisplayCreateUUIDFromDisplayID(screenNumber),
         let uuid = CFUUIDCreateString(nil, screenUuid.takeRetainedValue()) else { return nil }
+        return uuid
+    }
+
+    static func clearUuidCache() {
+        uuidCache.removeAll(keepingCapacity: true)
+    }
+
+    func cachedUuid() -> ScreenUuid? {
+        let key = ObjectIdentifier(self)
+        if let uuid = NSScreen.uuidCache[key] { return uuid }
+        guard let uuid = uuid() else { return nil }
+        NSScreen.uuidCache[key] = uuid
         return uuid
     }
 
@@ -98,7 +112,7 @@ extension NSScreen {
         var x = screenFrame.minX + max(screenFrame.width - panelFrame.width, 0) * 0.5
         var y = screenFrame.minY + max(screenFrame.height - panelFrame.height, 0) * 0.5
         if (DockAltTabMode) {
-            let scrollView = App.app.thumbnailsPanel.contentView?.accessibilityChildren()?.first as! NSView // thumbnails container
+            let scrollView = TilesPanel.shared.contentView?.accessibilityChildren()?.first as! NSView // thumbnails container
             let firstThumbnail = scrollView.accessibilityChildren()?.first as! NSView
             x = CGFloat(DockAltTabFORCEDX) //the center of the dock icon (that caused the preview)
             y = CGFloat(DockAltTabFORCEDY) //the center of the dock icon (that caused the preview)
@@ -121,4 +135,3 @@ extension NSScreen {
 }
 
 typealias ScreenUuid = CFString
-

@@ -1,6 +1,5 @@
 var DockAltTabFORCEDX = 0
 var DockAltTabFORCEDY = 0
-var DockAltTabMode = false
 var DockAltTabDockPos = ""
 var DockAltTabApp: NSRunningApplication? = nil
 var DockAltTabRepositionTimer: Timer? = nil
@@ -8,9 +7,9 @@ var DockAltTabRepositionTimer: Timer? = nil
 func DockAltTabRadiusFix() {
     if (Preferences.theme != .macOs) {return}
     let num = 22.0
-    App.app.thumbnailsPanel.thumbnailsView.contentView.layer?.cornerRadius = CGFloat(num)
-    App.app.thumbnailsPanel.thumbnailsView.contentView.updateRoundedCorners(num)
-    App.app.thumbnailsPanel.thumbnailsView.scrollView.layer?.cornerRadius = CGFloat(num)
+    TilesView.contentView.layer?.cornerRadius = CGFloat(num)
+    TilesView.contentView.updateRoundedCorners(num)
+    TilesView.scrollView.layer?.cornerRadius = CGFloat(num)
 }
 func startDockAltTabMode(app: NSRunningApplication) {
     DockAltTabMode = true
@@ -59,17 +58,17 @@ class showAppScriptCommand: NSScriptCommand {
         DockAltTabFORCEDY = y
         DockAltTabDockPos = self.evaluatedArguments!["dockPos"] == nil ? "bottom" : self.evaluatedArguments!["dockPos"] as! String;
         let tarApp = appInstances[0]
-        App.app.appIsBeingUsed = true /* actually line 1 of showUI() */
+        App.appIsBeingUsed = true /* actually line 1 of showUI() */
         
-//        if App.app.isFirstSummon {        /* begin follow/modify showUIOrCycleSelection */
+//        if App.isFirstSummon {        /* begin follow/modify showUIOrCycleSelection */
             NSScreen.updatePreferred()
-            if App.app.isVeryFirstSummon {
+            if App.isVeryFirstSummon {
                 Windows.sortByLevel()
-                App.app.isVeryFirstSummon = false
+                App.isVeryFirstSummon = false
             }
-            App.app.isFirstSummon = false
-            App.app.shortcutIndex = 2 // Shortcut 3 = index 2 = DockAltTab
-            if !Windows.updatesBeforeShowing() { App.app.hideUi(); return self }
+            App.isFirstSummon = false
+            App.shortcutIndex = 2 // Shortcut 3 = index 2 = DockAltTab
+            if !Windows.updatesBeforeShowing() { App.hideUi(); return self }
             //            Windows.detectTabbedWindows()
             //            Spaces.refreshAllIdsAndIndexes()
             //            Windows.updateSpaces()
@@ -85,46 +84,46 @@ class showAppScriptCommand: NSScriptCommand {
 //                                ($0.hide == .always || (window.isWindowlessApp && $0.hide != .none))
 //                        }
 //                    } ?? false) &&
-                    !(/* Preferences.appsToShow[App.app.shortcutIndex] == .active && */ window.application.pid != tarApp.processIdentifier) &&
-//                    !(Preferences.appsToShow[App.app.shortcutIndex] == .nonActive && window.application.pid == tarApp.processIdentifier) &&
-                    !(!(Preferences.showHiddenWindows[App.app.shortcutIndex] != .hide) && window.isHidden) &&
-                    ((Preferences.showWindowlessApps[App.app.shortcutIndex] != .hide && window.isWindowlessApp) ||
+                    !(/* Preferences.appsToShow[App.shortcutIndex] == .active && */ window.application.pid != tarApp.processIdentifier) &&
+//                    !(Preferences.appsToShow[App.shortcutIndex] == .nonActive && window.application.pid == tarApp.processIdentifier) &&
+                    !(!(Preferences.showHiddenWindows[App.shortcutIndex] != .hide) && window.isHidden) &&
+                    ((Preferences.showWindowlessApps[App.shortcutIndex] != .hide && window.isWindowlessApp) ||
                         !window.isWindowlessApp &&
-                        !(!(Preferences.showFullscreenWindows[App.app.shortcutIndex] != .hide) && window.isFullscreen) &&
-                        !(!(Preferences.showMinimizedWindows[App.app.shortcutIndex] != .hide) && window.isMinimized) &&
-                        !(Preferences.spacesToShow[App.app.shortcutIndex] == .visible && !inVisibleSpace) &&
-                        !(Preferences.screensToShow[App.app.shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
+                        !(!(Preferences.showFullscreenWindows[App.shortcutIndex] != .hide) && window.isFullscreen) &&
+                        !(!(Preferences.showMinimizedWindows[App.shortcutIndex] != .hide) && window.isMinimized) &&
+                        !(Preferences.spacesToShow[App.shortcutIndex] == .visible && !inVisibleSpace) &&
+                        !(Preferences.screensToShow[App.shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
                         (Preferences.showTabsAsWindows || !window.isTabbed))
             }
             //            Windows.reorderList()
             Windows.setInitialSelectedAndHoveredWindowIndex()
             if Preferences.windowDisplayDelay == DispatchTimeInterval.milliseconds(0) {
-                App.app.buildUiAndShowPanel()
+                App.buildUiAndShowPanel()
             } else {
-                App.app.delayedDisplayScheduled += 1
+                App.delayedDisplayScheduled += 1
                 DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + Preferences.windowDisplayDelay) { () -> () in
-                    if App.app.delayedDisplayScheduled == 1 {
-                        App.app.buildUiAndShowPanel()
+                    if App.delayedDisplayScheduled == 1 {
+                        App.buildUiAndShowPanel()
                     }
-                    App.app.delayedDisplayScheduled -= 1
+                    App.delayedDisplayScheduled -= 1
                 }
             }
 //        } else {
-//            App.app.cycleSelection(.leading)
+//            App.cycleSelection(.leading)
 //            KeyRepeatTimer.startRepeatingKeyNextWindow()
             
 //        }
         // stop following showUIOrCycleSelection
         
         // make sure focus is on 1st window
-//        if (DockAltTabMode && DockAltTabDockPos == "right") {App.app.previousWindowShortcutWithRepeatingKey()}
-//        if (DockAltTabMode && DockAltTabDockPos == "right") {App.app.previousWindowShortcutWithRepeatingKey()}
+//        if (DockAltTabMode && DockAltTabDockPos == "right") {App.previousWindowShortcutWithRepeatingKey()}
+//        if (DockAltTabMode && DockAltTabDockPos == "right") {App.previousWindowShortcutWithRepeatingKey()}
         
         //follow hideUI
-//        App.app.appIsBeingUsed = false
-//        App.app.isFirstSummon = true
+//        App.appIsBeingUsed = false
+//        App.isFirstSummon = true
 //        MouseEvents.toggle(false)
-//        App.app.hideThumbnailPanelWithoutChangingKeyWindow()
+//        App.hideTilesPanelWithoutChangingKeyWindow()
         
         
         //todo: if DAT mode && mouse hovered on preview:

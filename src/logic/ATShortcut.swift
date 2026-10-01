@@ -1,6 +1,10 @@
 import Cocoa
 import ShortcutRecorder
 
+// these globals live here (rather than in ScriptCommands/) so both the app and unit-tests targets can compile the files that use them
+var DockAltTabMode = false
+var DockAltTabModDict = ["Shift": false, "Option": false, "Command": false]
+
 func DATSetKey(_ s: Shortcut, _ val: Bool) {
     let k = String(s.readableStringRepresentation(isASCII: true).dropLast()) // last is "-"
     if (DockAltTabModDict[k] == nil) {return;}
@@ -27,9 +31,7 @@ class ATShortcut {
     }
 
     func matches(_ id: Int?, _ shortcutState: ShortcutState?, _ keyCode: UInt32?, _ modifiers: NSEvent.ModifierFlags?) -> Bool {
-        if let id, let shortcutState {
-            let shortcutIndex = id
-            let shortcutId = KeyboardEventsTestable.globalShortcutsIds.first { $0.value == shortcutIndex }!.key
+        if let id, let shortcutState, let shortcutId = KeyboardEventsTestable.globalShortcutsIds.first(where: { $0.value == id })?.key {
             if shortcutId == self.id {
                 state = shortcutState
                 if (triggerPhase == .down && state == .down) || (triggerPhase == .up && state == .up) {
@@ -61,21 +63,28 @@ class ATShortcut {
             return modifiersCleaned == (modifiersCleaned | shortcutModifiersCleaned)
         }
         // other shortcuts: contains exactly or exactly + holdShortcut modifiers
-        let holdModifiersCleaned = ControlsTab.shortcuts[Preferences.indexToName("holdShortcut", App.app.shortcutIndex)]?.shortcut.carbonModifierFlags.cleaned() ?? 0
+        let holdModifiersCleaned = ControlsTab.shortcuts[Preferences.indexToName("holdShortcut", App.shortcutIndex)]?.shortcut.carbonModifierFlags.cleaned() ?? 0
+        // nextWindowShortcut when panel is open: also match base key without holdShortcut modifiers
+        if App.appIsBeingUsed && id.hasPrefix("nextWindowShortcut") {
+            let baseModifiersCleaned = shortcutModifiersCleaned & ~holdModifiersCleaned
+            if modifiersCleaned == baseModifiersCleaned {
+                return true
+            }
+        }
         return modifiersCleaned == shortcutModifiersCleaned || modifiersCleaned == (shortcutModifiersCleaned | holdModifiersCleaned)
     }
 
     func shouldTrigger() -> Bool {
         if scope == .global {
-            if triggerPhase == .down && (!App.app.appIsBeingUsed || index == nil || index == App.app.shortcutIndex) {
+            if triggerPhase == .down && (!App.appIsBeingUsed || index == nil || index == App.shortcutIndex) {
                 return true
             }
-            if triggerPhase == .up && App.app.appIsBeingUsed && (index == nil || index == App.app.shortcutIndex) && !App.app.forceDoNothingOnRelease && Preferences.shortcutStyle[App.app.shortcutIndex] == .focusOnRelease {
+            if triggerPhase == .up && App.appIsBeingUsed && (index == nil || index == App.shortcutIndex) && !App.forceDoNothingOnRelease && Preferences.shortcutStyle == .focusOnRelease {
                 return true
             }
         }
         if scope == .local {
-            if App.app.appIsBeingUsed && (index == nil || index == App.app.shortcutIndex) {
+            if App.appIsBeingUsed && (index == nil || index == App.shortcutIndex) {
                 return true
             }
         }
@@ -96,8 +105,8 @@ class ATShortcut {
         // Another issue is events being dropped by macOS, which we never receive
         // Knowing this, we handle these edge-cases by double checking if holdShortcut is UP, when any shortcut state is UP
         // If it is, then we trigger the holdShortcut action
-        if App.app.appIsBeingUsed && !App.app.forceDoNothingOnRelease && Preferences.shortcutStyle[App.app.shortcutIndex] == .focusOnRelease {
-            if let currentHoldShortcut = ControlsTab.shortcuts[Preferences.indexToName("holdShortcut", App.app.shortcutIndex)],
+        if App.appIsBeingUsed && !App.forceDoNothingOnRelease && Preferences.shortcutStyle == .focusOnRelease {
+            if let currentHoldShortcut = ControlsTab.shortcuts[Preferences.indexToName("holdShortcut", App.shortcutIndex)],
                id == currentHoldShortcut.id {
                 let currentModifiers = cocoaToCarbonFlags(ModifierFlags.current)
                 if currentModifiers != (currentModifiers | (currentHoldShortcut.shortcut.carbonModifierFlags)) {

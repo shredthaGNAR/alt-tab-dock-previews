@@ -5,6 +5,7 @@ import ScreenCaptureKit.SCShareableContent
 class SystemPermissions {
     static var preStartupPermissionsPassed = false
     private static var timer: DispatchSourceTimer!
+    private static var timerIsFrequent = false
 
     static func ensurePermissionsAreGranted() {
         timer = DispatchSource.makeTimerSource(queue: BackgroundWork.permissionsCheckOnTimerQueue.strongUnderlyingQueue)
@@ -15,7 +16,8 @@ class SystemPermissions {
 
     private static func checkPermissionsOnTimer() {
         AccessibilityPermission.update()
-        if !preStartupPermissionsPassed || App.app.permissionsWindow.isVisible {
+        let isPermissionsWindowVisible = PermissionsWindow.shared?.isVisible ?? false
+        if !preStartupPermissionsPassed || isPermissionsWindowVisible {
             ScreenRecordingPermission.update()
         }
         Logger.debug { "accessibility:\(AccessibilityPermission.status) screenRecording:\(ScreenRecordingPermission.status)" }
@@ -23,10 +25,17 @@ class SystemPermissions {
             checkPermissionsPreStartup()
         } else {
             checkPermissionsPostStartup()
+            if isPermissionsWindowVisible && !timerIsFrequent {
+                setFrequentTimer()
+            } else if !isPermissionsWindowVisible && timerIsFrequent {
+                setInfrequentTimer()
+            }
         }
         DispatchQueue.main.async {
             Menubar.togglePermissionCallout(ScreenRecordingPermission.status != .granted)
-            App.app.permissionsWindow.updatePermissionViews()
+            if PermissionsWindow.shared != nil {
+                PermissionsWindow.updatePermissionViews()
+            }
         }
     }
 
@@ -34,13 +43,13 @@ class SystemPermissions {
         if AccessibilityPermission.status != .notGranted && ScreenRecordingPermission.status != .notGranted {
             DispatchQueue.main.async {
                 preStartupPermissionsPassed = true
-                App.app.permissionsWindow?.close()
+                PermissionsWindow.shared?.close()
                 setInfrequentTimer()
-                App.app.continueAppLaunchAfterPermissionsAreGranted()
+                App.continueAppLaunchAfterPermissionsAreGranted()
             }
         } else {
             DispatchQueue.main.async {
-                App.app.permissionsWindow.show()
+                App.showPermissionsWindow()
             }
         }
     }
@@ -48,19 +57,22 @@ class SystemPermissions {
     private static func checkPermissionsPostStartup() {
         if AccessibilityPermission.status == .notGranted {
             Logger.error { "Accessibility permission revoked while AltTab was running; restarting" }
-            DispatchQueue.main.async { App.app.restart() }
+            DispatchQueue.main.async { App.restart() }
         }
     }
 
     static func setInfrequentTimer() {
+        timerIsFrequent = false
         timer.schedule(deadline: .now() + 5, repeating: 5, leeway: .seconds(1))
     }
 
     static func setFrequentTimer() {
+        timerIsFrequent = true
         timer.schedule(deadline: .now(), repeating: 0.5, leeway: .milliseconds(500))
     }
 
     private static func setImmediateTimer() {
+        timerIsFrequent = false
         timer.schedule(deadline: .now(), repeating: .never, leeway: .never)
     }
 }
@@ -126,7 +138,7 @@ class ScreenRecordingPermission {
             SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: false) { shareableContent, error in
                 // this callback runs on a GCD queue, not on the thread that called getWithCompletionHandler
                 if #available(macOS 14.0, *), let shareableContent, error == nil {
-                    DispatchQueue.main.async {
+                    BackgroundWork.screenshotsQueue.addOperation {
                         WindowCaptureScreenshots.cachedSCWindows = shareableContent.windows
                     }
                 }

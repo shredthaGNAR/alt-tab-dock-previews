@@ -4,10 +4,10 @@ import Cocoa
 
 class ShowScriptCommand: NSScriptCommand {
     override func performDefaultImplementation() -> Any? {
-//        App.app.showUi()
-        App.app.appIsBeingUsed = true
-        App.app.showUiOrCycleSelection(0, true)
-        App.app.previousWindowShortcutWithRepeatingKey()
+//        App.showUi()
+        App.appIsBeingUsed = true
+        App.showUiOrCycleSelection(0, true)
+        App.previousWindowShortcutWithRepeatingKey()
         return self
     }
 }

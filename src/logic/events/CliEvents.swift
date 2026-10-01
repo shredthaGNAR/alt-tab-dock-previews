@@ -35,6 +35,7 @@ class CliServer {
     static let error = "error"
     static let noOutput = "noOutput"
 
+    // main.sync is safe here: the main thread never synchronously waits on the CLI thread
     static func executeCommandAndSendReponse(_ rawValue: String) -> Codable {
         var output: Codable = ""
         DispatchQueue.main.sync {
@@ -84,8 +85,8 @@ class CliServer {
             return noOutput
         }
         if rawValue.hasPrefix("--show="),
-           let shortcutIndex = Int(rawValue.dropFirst("--show=".count)), (0...3).contains(shortcutIndex) {
-            App.app.showUi(shortcutIndex)
+           let shortcutIndex = Int(rawValue.dropFirst("--show=".count)), (0..<Preferences.shortcutCount).contains(shortcutIndex) {
+            App.showUi(shortcutIndex)
             return noOutput
         }
         return error

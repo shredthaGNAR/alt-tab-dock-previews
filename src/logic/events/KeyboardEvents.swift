@@ -14,7 +14,7 @@ class KeyboardEvents {
     private static let cgEventFlagsChangedHandler: CGEventTapCallBack = { _, type, cgEvent, _ in
         if type == .flagsChanged {
             // TODO: it would be great to shortcut matching and trigger on the background thread
-            // it would enable us to set App.app.isBeingUsed here, and could stop tasks on main when they check the flag
+            // it would enable us to set App.shared.isBeingUsed here, and could stop tasks on main when they check the flag
             DispatchQueue.main.async {
                 let modifiers = NSEvent.ModifierFlags(rawValue: UInt(cgEvent.flags.rawValue))
                 // TODO: ideally, we want to absorb all modifier keys except holdShortcut
@@ -51,6 +51,12 @@ class KeyboardEvents {
         }
     }
 
+    static func reEnableTapIfNeeded() {
+        guard let eventTap, !CGEvent.tapIsEnabled(tap: eventTap) else { return }
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+        Logger.warning { "" }
+    }
+
     static func addEventHandlers() {
         addLocalMonitorForKeyDownAndKeyUp()
         addCgEventTapForModifierFlags()
@@ -58,14 +64,16 @@ class KeyboardEvents {
 
     private static func unregisterHotKeyIfNeeded(_ controlId: String, _ shortcut: Shortcut) {
         if shortcut.keyCode != .none {
-            UnregisterEventHotKey(eventHotKeyRefs[controlId]!)
-            eventHotKeyRefs[controlId] = nil
+            if let ref = eventHotKeyRefs[controlId] {
+                UnregisterEventHotKey(ref)
+                eventHotKeyRefs[controlId] = nil
+            }
         }
     }
 
     private static func registerHotKeyIfNeeded(_ controlId: String, _ shortcut: Shortcut) {
         if shortcut.keyCode != .none {
-            let id = KeyboardEventsTestable.globalShortcutsIds[controlId]!
+            guard let id = KeyboardEventsTestable.globalShortcutsIds[controlId] else { return }
             let hotkeyId = EventHotKeyID(signature: signature, id: UInt32(id))
             let key = shortcut.carbonKeyCode
             let mods = shortcut.carbonModifierFlags
@@ -79,8 +87,10 @@ class KeyboardEvents {
     // TODO: handle this on a background thread?
     private static func addLocalMonitorForKeyDownAndKeyUp() {
         NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { (event: NSEvent) in
-            let someShortcutTriggered = handleKeyboardEvent(nil, nil, event.type == .keyDown ? UInt32(event.keyCode) : nil, event.modifierFlags, event.type == .keyDown ? event.isARepeat : false)
-            return someShortcutTriggered ? nil : event
+            let keyCode = event.type == .keyDown ? UInt32(event.keyCode) : nil
+            let isARepeat = event.type == .keyDown ? event.isARepeat : false
+            let shouldAbsorbEvent = handleKeyboardEvent(nil, nil, keyCode, event.modifierFlags, isARepeat, event)
+            return shouldAbsorbEvent ? nil : event
         }
     }
 
@@ -91,7 +101,7 @@ class KeyboardEvents {
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: eventMask,
             callback: cgEventFlagsChangedHandler,
             userInfo: nil)
@@ -99,7 +109,7 @@ class KeyboardEvents {
             let runLoopSource = CFMachPortCreateRunLoopSource(nil, eventTap, 0)
             CFRunLoopAddSource(BackgroundWork.keyboardAndMouseAndTrackpadEventsThread.runLoop, runLoopSource, .commonModes)
         } else {
-            App.app.restart()
+            App.restart()
         }
     }
 

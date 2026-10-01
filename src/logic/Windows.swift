@@ -5,15 +5,48 @@ class Windows {
     static var selectedWindowIndex = Int(0)
     static var selectedWindowTarget: String?
     static var hoveredWindowIndex: Int?
+    // we use this to track if the focused window changed while alt-tab was open
+    private static var lastFocusedWindowTarget: String?
     private static var lastWindowActivityType = WindowActivityType.none
+    static var searchQuery = ""
+    private static var shouldSelectBestMatchOnSearchChange = false
+    private static var shouldRestoreDefaultSelectionOnSearchClear = false
+
+    static func shouldDisplay(_ window: Window) -> Bool {
+        window.shouldShowTheUser && Search.matches(window, query: searchQuery)
+    }
+
+    static func updateSearchQuery(_ query: String) {
+        let previousTrimmedQuery = Search.normalizedQuery(searchQuery)
+        let newTrimmedQuery = Search.normalizedQuery(query)
+        searchQuery = query
+        guard App.appIsBeingUsed else {
+            shouldSelectBestMatchOnSearchChange = false
+            shouldRestoreDefaultSelectionOnSearchClear = false
+            sort()
+            return
+        }
+        if previousTrimmedQuery != newTrimmedQuery {
+            if newTrimmedQuery.isEmpty {
+                shouldRestoreDefaultSelectionOnSearchClear = !previousTrimmedQuery.isEmpty
+                shouldSelectBestMatchOnSearchChange = false
+            } else {
+                shouldSelectBestMatchOnSearchChange = true
+                shouldRestoreDefaultSelectionOnSearchClear = false
+                hoveredWindowIndex = nil
+            }
+        }
+        sort()
+    }
 
     static func updateIsFullscreenOnCurrentSpace() {
         let windowsOnCurrentSpace = list.filter { !$0.isWindowlessApp }
         for window in windowsOnCurrentSpace {
-            AXUIElement.retryAxCallUntilTimeout(context: window.debugId(), after: .now() + humanPerceptionDelay, callType: .updateWindow) { [weak window] in
+            guard let wid = window.cgWindowId, let axUiElement = window.axUiElement else { continue }
+            AXCallScheduler.shared.schedule(key: "wid-\(wid)", context: window.debugId, pid: window.application.pid) { [weak window] in
                 guard let window else { return }
                 // we reuse existing code, to update .isFullscreen, as if there was a kAXWindowResizedNotification
-                try AccessibilityEvents.handleEventWindow(kAXWindowResizedNotification, window.cgWindowId!, window.application.pid, window.axUiElement!)
+                try AccessibilityEvents.handleEventWindow(kAXWindowResizedNotification, wid, window.application.pid, axUiElement)
             }
         }
     }
@@ -27,67 +60,47 @@ class Windows {
     }
 
     static func voiceOverWindow(_ windowIndex: Int = selectedWindowIndex) {
-        guard App.app.appIsBeingUsed && App.app.thumbnailsPanel.isKeyWindow else { return }
+        guard App.appIsBeingUsed && TilesPanel.shared.isKeyWindow else { return }
+        if TilesView.isSearchEditing { return }
         // it seems that sometimes makeFirstResponder is called before the view is visible
         // and it creates a delay in showing the main window; calling it with some delay seems to work around this
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(10)) {
-            let window = ThumbnailsView.recycledViews[windowIndex]
+            if TilesView.isSearchEditing { return }
+            let window = TilesView.recycledViews[windowIndex]
             if window.window_ != nil && window.window != nil {
-                App.app.thumbnailsPanel.makeFirstResponder(window)
+                TilesPanel.shared.makeFirstResponder(window)
             }
         }
     }
 
     static func previewSelectedWindowIfNeeded() {
-        if App.app.appIsBeingUsed && ScreenRecordingPermission.status == .granted
+        if App.appIsBeingUsed && ScreenRecordingPermission.status == .granted
                && (Preferences.previewSelectedWindow || DockAltTabWaitForWindow != 0) && !Preferences.onlyShowApplications()
-               && App.app.thumbnailsPanel.isKeyWindow,
+               && TilesPanel.shared.isKeyWindow,
            let window = selectedWindow(),
            let id = window.cgWindowId,
            let thumbnail = window.thumbnail,
            let position = window.position,
            let size = window.size {
-            App.app.previewPanel.show(id, thumbnail, position, size)
+            PreviewPanel.show(id, thumbnail, position, size)
         } else {
-            App.app.previewPanel.orderOut(nil)
-        }
-    }
-
-    /// tabs detection is a flaky work-around the lack of public API to observe OS tabs
-    /// see: https://github.com/lwouis/alt-tab-macos/issues/1540
-    private static func detectTabbedWindows(_ window: Window, _ cgsWindowIds: [CGWindowID], _ visibleCgsWindowIds: [CGWindowID]) {
-        if let cgWindowId = window.cgWindowId {
-            if window.isMinimized || window.isHidden {
-                if #available(macOS 13.0, *) {
-                    // not exact after window merging
-                    window.isTabbed = !cgsWindowIds.contains(cgWindowId)
-                } else {
-                    // not known
-                    window.isTabbed = false
-                }
-            } else {
-                window.isTabbed = !visibleCgsWindowIds.contains(cgWindowId)
-            }
+            PreviewPanel.shared.orderOut(nil)
         }
     }
 
     static func updatesBeforeShowing() -> Bool {
-        if list.count == 0 || MissionControl.state() == .showAllWindows || MissionControl.state() == .showFrontWindows { return false }
+        if MissionControl.state() == .showAllWindows || MissionControl.state() == .showFrontWindows { return false }
+        if list.isEmpty { return true }
         // TODO: find a way to update space info when spaces are changed, instead of on every trigger
         // workaround: when Preferences > Mission Control > "Displays have separate Spaces" is unchecked,
         // switching between displays doesn't trigger .activeSpaceDidChangeNotification; we get the latest manually
         Spaces.refresh()
-        let spaceIdsAndIndexes = Spaces.idsAndIndexes.map { $0.0 }
-        lazy var cgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes)
-        lazy var visibleCgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes, false)
         for window in list {
-            detectTabbedWindows(window, cgsWindowIds, visibleCgsWindowIds)
             window.updateSpacesAndScreen()
             refreshIfWindowShouldBeShownToTheUser(window)
         }
         refreshWhichWindowsToShowTheUser()
         sort()
-        if (!list.contains { $0.shouldShowTheUser }) { return false }
         return true
     }
 
@@ -95,7 +108,8 @@ class Windows {
     static func refreshThumbnailsAsync(_ windows: [Window], _ source: RefreshCausedBy, windowRemoved: Bool = false) {
         guard (!windows.isEmpty || windowRemoved) && ScreenRecordingPermission.status == .granted
                && !Preferences.onlyShowApplications()
-                && (!Appearance.hideThumbnails || (Preferences.previewSelectedWindow || DockAltTabWaitForWindow == windows[0].cgWindowId)) else { return }
+               && (!Appearance.hideThumbnails || (Preferences.previewSelectedWindow || DockAltTabWaitForWindow == windows[0].cgWindowId))
+               && (Preferences.captureWindowsInBackground || App.appIsBeingUsed) else { return }
         var eligibleWindows = [Window]()
         for window in windows {
             if !window.isWindowlessApp, let cgWindowId = window.cgWindowId, cgWindowId != CGWindowID(bitPattern: -1) {
@@ -128,23 +142,39 @@ class Windows {
         }
     }
 
+    private static func shouldHideWindow(_ window: Window, _ entry: ExceptionEntry) -> Bool {
+        switch entry.hide {
+        case .none:
+            return false
+        case .always:
+            return true
+        case .whenNoOpenWindow:
+            return window.isWindowlessApp
+        case .windowTitleContains:
+            guard let titleFilter = entry.windowTitleContains, !titleFilter.isEmpty else {
+                return false
+            }
+            return window.title.contains(titleFilter)
+        }
+    }
+
     private static func refreshIfWindowShouldBeShownToTheUser(_ window: Window) {
         window.shouldShowTheUser =
             !(window.application.bundleIdentifier.flatMap { id in
-                Preferences.blacklist.contains {
-                    id.hasPrefix($0.bundleIdentifier) &&
-                        ($0.hide == .always || (window.isWindowlessApp && $0.hide != .none))
+                Preferences.exceptions.contains {
+                    id.hasPrefix($0.bundleIdentifier) && shouldHideWindow(window, $0)
                 }
             } ?? false) &&
-            !((Preferences.appsToShow[App.app.shortcutIndex] == .active || DockAltTabMode) && window.application.pid != (DockAltTabMode ? DockAltTabApp!.processIdentifier : NSWorkspace.shared.frontmostApplication?.processIdentifier)) &&
-            !(Preferences.appsToShow[App.app.shortcutIndex] == .nonActive && window.application.pid == NSWorkspace.shared.frontmostApplication?.processIdentifier) &&
-            !(!(Preferences.showHiddenWindows[App.app.shortcutIndex] != .hide) && window.isHidden) &&
-            ((Preferences.showWindowlessApps[App.app.shortcutIndex] != .hide && window.isWindowlessApp) ||
+            !((Preferences.appsToShow[App.shortcutIndex] == .active || DockAltTabMode) && window.application.pid != (DockAltTabMode ? DockAltTabApp!.processIdentifier : Applications.frontmostPid)) &&
+            !(Preferences.appsToShow[App.shortcutIndex] == .nonActive && window.application.pid == Applications.frontmostPid) &&
+            !(!(Preferences.showHiddenWindows[App.shortcutIndex] != .hide) && window.isHidden) &&
+            ((Preferences.showWindowlessApps[App.shortcutIndex] != .hide && window.isWindowlessApp) ||
                 !window.isWindowlessApp &&
-                !(!(Preferences.showFullscreenWindows[App.app.shortcutIndex] != .hide) && window.isFullscreen) &&
-                !(!(Preferences.showMinimizedWindows[App.app.shortcutIndex] != .hide) && window.isMinimized) &&
-                !(Preferences.spacesToShow[App.app.shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
-                !(Preferences.screensToShow[App.app.shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
+                !(!(Preferences.showFullscreenWindows[App.shortcutIndex] != .hide) && window.isFullscreen) &&
+                !(!(Preferences.showMinimizedWindows[App.shortcutIndex] != .hide) && window.isMinimized) &&
+                !(Preferences.spacesToShow[App.shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
+                !(Preferences.spacesToShow[App.shortcutIndex] == .nonVisible && Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
+                !(Preferences.screensToShow[App.shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
                 (Preferences.showTabsAsWindows || !window.isTabbed))
     }
 
@@ -179,74 +209,151 @@ class Windows {
     //////////////////////////////
 
     static func selectedWindow() -> Window? {
-        return list.count > selectedWindowIndex ? list[selectedWindowIndex] : nil
+        guard list.count > selectedWindowIndex else { return nil }
+        let window = list[selectedWindowIndex]
+        return shouldDisplay(window) ? window : nil
     }
 
     static func setInitialSelectedAndHoveredWindowIndex() {
         let oldIndex = selectedWindowIndex
         selectedWindowIndex = 0
         selectedWindowTarget = nil
-        ThumbnailsView.highlight(oldIndex)
+        TilesView.highlight(oldIndex)
         if let oldIndex = hoveredWindowIndex {
             hoveredWindowIndex = nil
-            ThumbnailsView.highlight(oldIndex)
+            TilesView.highlight(oldIndex)
         }
         if DockAltTabMode {
             updateSelectedAndHoveredWindowIndex(DockAltTabDockPos == "right" ? list.lastIndex(where: { $0.shouldShowTheUser })! : list.firstIndex(where: { $0.shouldShowTheUser })!)
             return
         }
-        if let frontmostPid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
-           let frontmostApp = Applications.findOrCreate(frontmostPid),
-           (frontmostApp.focusedWindow == nil || Preferences.windowOrder[App.app.shortcutIndex] != .recentlyFocused),
+        if Applications.frontmostPid != nil,
+           Preferences.windowOrder[App.shortcutIndex] != .recentlyFocused,
            let lastFocusedOrderWindowIndex = getLastFocusedOrderWindowIndex() {
             updateSelectedAndHoveredWindowIndex(lastFocusedOrderWindowIndex)
         } else {
-            cycleSelectedWindowIndex(1)
-            if selectedWindowIndex == 0 {
+            // edge-case: when the 2 most recently focused windows are both minimized, select the first
+            if list.count >= 2 && list[0].isMinimized && list[1].isMinimized {
                 updateSelectedAndHoveredWindowIndex(0)
+            } else {
+                cycleSelectedWindowIndex(1)
+                if selectedWindowIndex == 0 {
+                    updateSelectedAndHoveredWindowIndex(0)
+                }
             }
         }
     }
 
     static func updateSelectedWindow() {
-        guard let index = (list.firstIndex { $0.id == selectedWindowTarget }) else {
+        let focusedWindowTarget = currentFocusedWindowTarget()
+        defer { lastFocusedWindowTarget = focusedWindowTarget }
+        if shouldRestoreDefaultSelectionOnSearchClear {
+            shouldRestoreDefaultSelectionOnSearchClear = false
             setInitialSelectedAndHoveredWindowIndex()
             return
         }
+        let visibleIndexes = visibleWindowIndexes()
+        guard let firstVisibleIndex = visibleIndexes.first else {
+            selectedWindowTarget = nil
+            hoveredWindowIndex = nil
+            return
+        }
+        if shouldSelectBestMatchOnSearchChange {
+            shouldSelectBestMatchOnSearchChange = false
+            updateSelectedAndHoveredWindowIndex(firstVisibleIndex)
+            return
+        }
+        if shouldSelectFromScratch(focusedWindowTarget) {
+            setInitialSelectedAndHoveredWindowIndex()
+            return
+        }
+        if restoreSelectionTargetIfVisible() { return }
+        adaptSelectionToVisibleIndexes(visibleIndexes, firstVisibleIndex)
+    }
+
+    private static func visibleWindowIndexes() -> [Int] {
+        list.indices.filter { shouldDisplay(list[$0]) }
+    }
+
+    private static func currentFocusedWindowTarget() -> String? {
+        getLastFocusedOrderWindowIndex().map { list[$0].id }
+    }
+
+    private static func shouldSelectFromScratch(_ focusedWindowTarget: String?) -> Bool {
+        selectedWindowTarget == nil || focusedWindowChangedWhileShowing(focusedWindowTarget)
+    }
+
+    private static func focusedWindowChangedWhileShowing(_ focusedWindowTarget: String?) -> Bool {
+        guard App.appIsBeingUsed, Search.normalizedQuery(searchQuery).isEmpty else { return false }
+        guard let lastFocusedWindowTarget, let focusedWindowTarget else { return false }
+        return focusedWindowTarget != lastFocusedWindowTarget
+    }
+
+    private static func restoreSelectionTargetIfVisible() -> Bool {
+        guard let selectedWindowTarget else { return false }
+        guard let index = list.firstIndex(where: { $0.id == selectedWindowTarget && shouldDisplay($0) }) else { return false }
+        if index == selectedWindowIndex { return true }
         updateSelectedAndHoveredWindowIndex(index)
+        return true
+    }
+
+    private static func adaptSelectionToVisibleIndexes(_ visibleIndexes: [Int], _ firstVisibleIndex: Int) {
+        guard let lastVisibleIndex = visibleIndexes.last else { return }
+        if !visibleIndexes.contains(selectedWindowIndex) {
+            let closest = visibleIndexes.last(where: { $0 < selectedWindowIndex }) ?? lastVisibleIndex
+            updateSelectedAndHoveredWindowIndex(closest)
+            return
+        }
+        if selectedWindowIndex > lastVisibleIndex {
+            updateSelectedAndHoveredWindowIndex(lastVisibleIndex)
+            return
+        }
+        if selectedWindowIndex < firstVisibleIndex {
+            updateSelectedAndHoveredWindowIndex(firstVisibleIndex)
+            return
+        }
+        if selectedWindowTarget == nil {
+            selectedWindowTarget = list[selectedWindowIndex].id
+        }
     }
 
     static func updateSelectedAndHoveredWindowIndex(_ newIndex: Int, _ fromMouse: Bool = false) {
+        guard newIndex >= 0 && newIndex < list.count else { return }
+        guard shouldDisplay(list[newIndex]) else { return }
         if (DockAltTabWaitForWindow != 0 && DockAltTabWaitForWindow != list[newIndex].cgWindowId) { DockAltTabThumbnailPreviewRequestHD(window: list[newIndex]) }
         var index: Int?
         if fromMouse && (newIndex != hoveredWindowIndex || lastWindowActivityType == .focus) {
             let oldIndex = hoveredWindowIndex
             hoveredWindowIndex = newIndex
             if let oldIndex {
-                ThumbnailsView.highlight(oldIndex)
+                TilesView.highlight(oldIndex)
             }
             index = hoveredWindowIndex
             lastWindowActivityType = .hover
+        }
+        if !fromMouse {
+            TilesView.thumbnailOverView.resetHoveredWindow()
         }
         if (!fromMouse || (Preferences.mouseHoverEnabled || DockAltTabMode))
                && (newIndex != selectedWindowIndex || lastWindowActivityType == .hover) {
             let oldIndex = selectedWindowIndex
             selectedWindowIndex = newIndex
             selectedWindowTarget = list[newIndex].id
-            ThumbnailsView.highlight(oldIndex)
+            TilesView.highlight(oldIndex)
             previewSelectedWindowIfNeeded()
             index = selectedWindowIndex
             lastWindowActivityType = .focus
         }
         guard let index else { return }
-        ThumbnailsView.highlight(index)
-        let focusedView = ThumbnailsView.recycledViews[index]
-        App.app.thumbnailsPanel.thumbnailsView.scrollView.contentView.scrollToVisible(focusedView.frame)
+        TilesView.highlight(index)
+        let focusedView = TilesView.recycledViews[index]
+        TilesView.scrollView.contentView.scrollToVisible(focusedView.frame)
         voiceOverWindow(index)
     }
 
     static func cycleSelectedWindowIndex(_ step: Int, allowWrap: Bool = true) {
-        guard App.app.appIsBeingUsed else { return }
+        guard App.appIsBeingUsed else { return }
+        guard list.contains(where: { shouldDisplay($0) }) else { return }
         let nextIndex = selectedWindowIndexAfterCycling(step)
         // don't wrap-around at the end, if key-repeat
         if (((step > 0 && nextIndex < selectedWindowIndex) || (step < 0 && nextIndex > selectedWindowIndex)) &&
@@ -259,14 +366,14 @@ class Windows {
     }
 
     static func selectedWindowIndexAfterCycling(_ step: Int) -> Int {
-        if list.count == 0 { return 0 }
+        if list.count == 0 || !list.contains(where: { shouldDisplay($0) }) { return selectedWindowIndex }
         var iterations = 0
         var targetIndex = selectedWindowIndex
         repeat {
             let next = (targetIndex + step) % list.count
             targetIndex = next < 0 ? list.count + next : next
             iterations += 1
-        } while !list[targetIndex].shouldShowTheUser && iterations <= list.count
+        } while !shouldDisplay(list[targetIndex]) && iterations <= list.count
         return targetIndex
     }
 
@@ -294,19 +401,29 @@ class Windows {
 
     /// reordered list based on preferences, keeping the original index
     private static func sort() {
+        let trimmedQuery = Search.normalizedQuery(searchQuery)
         list.sort {
+            if !trimmedQuery.isEmpty {
+                let matches0 = Search.matches($0, query: trimmedQuery)
+                let matches1 = Search.matches($1, query: trimmedQuery)
+                if matches0 != matches1 { return matches0 }
+                let score0 = Search.relevance(for: $0, query: trimmedQuery)
+                let score1 = Search.relevance(for: $1, query: trimmedQuery)
+                if score0 != score1 { return score0 > score1 }
+                return $0.lastFocusOrder < $1.lastFocusOrder
+            }
             // separate buckets for these types of windows
-            if Preferences.showWindowlessApps[App.app.shortcutIndex] == .showAtTheEnd && $0.isWindowlessApp != $1.isWindowlessApp {
+            if Preferences.showWindowlessApps[App.shortcutIndex] == .showAtTheEnd && $0.isWindowlessApp != $1.isWindowlessApp {
                 return $1.isWindowlessApp
             }
-            if Preferences.showHiddenWindows[App.app.shortcutIndex] == .showAtTheEnd && $0.isHidden != $1.isHidden {
+            if Preferences.showHiddenWindows[App.shortcutIndex] == .showAtTheEnd && $0.isHidden != $1.isHidden {
                 return $1.isHidden
             }
-            if Preferences.showMinimizedWindows[App.app.shortcutIndex] == .showAtTheEnd && $0.isMinimized != $1.isMinimized {
+            if Preferences.showMinimizedWindows[App.shortcutIndex] == .showAtTheEnd && $0.isMinimized != $1.isMinimized {
                 return $1.isMinimized
             }
             // sort within each buckets
-            let sortType = Preferences.windowOrder[App.app.shortcutIndex]
+            let sortType = Preferences.windowOrder[App.shortcutIndex]
             if sortType == .recentlyFocused {
                 return $0.lastFocusOrder < $1.lastFocusOrder
             }
@@ -343,7 +460,7 @@ class Windows {
         var index: Int? = nil
         var lastFocusOrderMin = Int.max
         for (offset, w) in list.enumerated() {
-            if !w.isWindowlessApp && w.shouldShowTheUser && w.lastFocusOrder < lastFocusOrderMin {
+            if !w.isWindowlessApp && shouldDisplay(w) && w.lastFocusOrder < lastFocusOrderMin {
                 lastFocusOrderMin = w.lastFocusOrder
                 index = offset
             }
@@ -367,29 +484,32 @@ class Windows {
         return windowsToRefresh
     }
 
-    static func findOrCreate(_ windowAxUiElement: AXUIElement, _ wid: CGWindowID, _ app: Application, _ level: CGWindowLevel, _ title: String?, _ subrole: String?, _ role: String?, _ size: CGSize?, _ position: CGPoint?, _ isFullscreen: Bool?, _ isMinimized: Bool?) -> Window? {
+    static func findOrCreate(_ windowAxUiElement: AXUIElement, _ wid: CGWindowID, _ app: Application, _ level: CGWindowLevel, _ title: String?, _ subrole: String?, _ role: String?, _ size: CGSize?, _ position: CGPoint?, _ isFullscreen: Bool?, _ isMinimized: Bool?) -> (Window?, Bool) {
         if let window = (list.first { $0.isEqualRobust(windowAxUiElement, wid) }) {
             // on any window event, we take the opportunity to refresh all window attributes
             window.updateFromAxAttributes(title, size, position, isFullscreen, isMinimized)
-            return window
+            return (window, false)
         }
-        guard WindowDiscriminator.isActualWindow(app, wid, level, title, subrole, role, size) else { return nil }
+        guard WindowDiscriminator.isActualWindow(app, wid, level, title, subrole, role, size) else { return (nil, false) }
         let window = Window(windowAxUiElement, app, wid, title, isFullscreen, isMinimized, position, size)
         appendWindow(window)
-        return window
+        return (window, true)
     }
 
     static func appendWindow(_ window: Window) {
-        list.forEach {
-            $0.lastFocusOrder += 1
-        }
+        window.lastFocusOrder = list.count
         list.append(window)
-        if list.count > ThumbnailsView.recycledViews.count {
-            ThumbnailsView.recycledViews.append(ThumbnailView())
+        if list.count > TilesView.recycledViews.count {
+            TilesView.recycledViews.append(TileView())
         }
     }
 
     static func removeWindows(_ windows: [Window], _ addWindowlessWindowIfNeeded: Bool) {
+        for w in windows {
+            if w.application.focusedWindow?.cgWindowId == w.cgWindowId {
+                w.application.focusedWindow = nil
+            }
+        }
         let toRemove = windows.map { $0.lastFocusOrder }
         list.removeAll { w in
             if toRemove.contains(w.lastFocusOrder) {
@@ -399,10 +519,21 @@ class Windows {
             w.lastFocusOrder -= howManyToShift
             return false
         }
+        for w in windows {
+            if let wid = w.cgWindowId {
+                AXCallScheduler.shared.removeEntry(key: "wid-\(wid)")
+                Applications.windowListUpdateThrottler.removeEntry(withKey: "\(wid)")
+            }
+            // when a tabbed window is removed, update its former siblings' tab group
+            if let siblingWids = w.tabbedSiblingWids {
+                TabGroup.removedWindowFromGroup(wid: w.cgWindowId, siblingWids: siblingWids)
+            }
+        }
         if addWindowlessWindowIfNeeded {
             windows.forEach { $0.application.addWindowlessWindowIfNeeded() }
         }
-        App.app.refreshOpenUi([], .refreshUiAfterExternalEvent, windowRemoved: true)
+        lastFocusedWindowTarget = getLastFocusedOrderWindowIndex().map { list[$0].id }
+        App.refreshOpenUiAfterExternalEvent([], windowRemoved: true)
     }
 }
 

@@ -4,7 +4,7 @@ import Cocoa
 
 class HideScriptCommand: NSScriptCommand {
 	override func performDefaultImplementation() -> Any? {
-        App.app.hideUi()
+        App.hideUi()
         DockAltTabReset()
         return self
 	}

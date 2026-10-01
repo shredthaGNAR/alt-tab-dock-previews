@@ -11,7 +11,7 @@ class Window {
     ]
     private static var globalCreationCounter = Int.zero
 
-    var id: String!
+    var id: String
     var cgWindowId: CGWindowID?
     var lastFocusOrder = Int.zero
     var creationOrder = Int.zero
@@ -20,6 +20,7 @@ class Window {
     var icon: CGImage? { get { application.icon } }
     var shouldShowTheUser = true
     var isTabbed: Bool = false
+    var tabbedSiblingWids: [CGWindowID]?
     var isHidden: Bool { get { application.isHidden } }
     var dockLabel: String? { get { application.dockLabel } }
     var isFullscreen = false
@@ -35,40 +36,47 @@ class Window {
     var application: Application
     var axObserver: AXObserver?
     var rowIndex: Int?
-
-    func debugId() -> String {
-        return "\(application.debugId()) (wid:\(cgWindowId) title:\(title))"
-    }
+    var debugId: String!
+    var lastSearchQuery: String?
+    var swAppResults: [SWResult] = []
+    var swTitleResults: [SWResult] = []
+    var swBestSimilarity = 0.0
 
     init(_ axUiElement: AXUIElement, _ application: Application, _ wid: CGWindowID, _ title: String?, _ isFullscreen: Bool?, _ isMinimized: Bool?, _ position: CGPoint?, _ size: CGSize?) {
-        id = "\(wid)"
+        id = "wid-\(wid)"
         self.axUiElement = axUiElement
         self.application = application
         cgWindowId = wid
         self.updateSpacesAndScreen()
         updateFromAxAttributes(title, size, position, isFullscreen, isMinimized)
+        debugId = "\(self.application.debugId) (wid:\(cgWindowId) title:\(self.title))"
         Window.globalCreationCounter += 1
         creationOrder = Window.globalCreationCounter
         application.removeWindowlessAppWindow()
         // the app may have timed out trying to subscribe to app notifications
         // It may be responsive now since it has a window; we attempt again
         application.observeEventsIfEligible()
+        // fetch app icon only if we display that app in the switcher
+        application.fetchAppIcon()
         checkIfFocused()
-        Logger.info { self.debugId() }
+        Logger.info { self.debugId }
         observeEvents()
     }
 
     init(_ application: Application) {
-        id = "\(application.pid)"
+        id = "pid-\(application.pid)"
         self.application = application
         title = bestEffortTitle(nil)
         Window.globalCreationCounter += 1
         creationOrder = Window.globalCreationCounter
-        Logger.debug { self.debugId() }
+        debugId = "\(application.debugId) (title:\(title))"
+        // fetch app icon only if we display that app in the switcher
+        application.fetchAppIcon()
+        Logger.debug { self.debugId }
     }
 
     deinit {
-        Logger.info { self.debugId() }
+        Logger.info { self.debugId }
     }
 
     func updateFromAxAttributes(_ title: String?, _ size: CGSize?, _ position: CGPoint?, _ isFullscreen: Bool?, _ isMinimized: Bool?) {
@@ -77,6 +85,7 @@ class Window {
         self.position = position
         self.isFullscreen = isFullscreen ?? false
         self.isMinimized = isMinimized ?? false
+        lastSearchQuery = nil
     }
 
     func isEqualRobust(_ otherWindowAxUiElement: AXUIElement, _ otherWindowWid: CGWindowID?) -> Bool {
@@ -88,12 +97,12 @@ class Window {
     private func observeEvents() {
         AXObserverCreate(application.pid, AccessibilityEvents.axObserverCallback, &axObserver)
         guard let axObserver else { return }
-        AXUIElement.retryAxCallUntilTimeout(context: debugId(), pid: application.pid, callType: .subscribeToWindowNotification) { [weak self] in
+        AXCallScheduler.shared.schedule(key: "sub-win-\(cgWindowId)", context: debugId, pid: application.pid) { [weak self] in
             guard let self else { return }
             if try self.axUiElement!.subscribeToNotification(axObserver, Window.notifications.first!) {
-                Logger.debug { "Subscribed to window: \(self.debugId())" }
+                Logger.debug { "Subscribed to window: \(self.debugId)" }
                 for notification in Window.notifications.dropFirst() {
-                    AXUIElement.retryAxCallUntilTimeout(context: self.debugId(), pid: self.application.pid, callType: .subscribeToWindowNotification) { [weak self] in
+                    AXCallScheduler.shared.schedule(key: "sub-win-\(cgWindowId)-\(notification)", context: self.debugId, pid: self.application.pid) { [weak self] in
                         try self?.axUiElement!.subscribeToNotification(axObserver, notification)
                     }
                 }
@@ -105,20 +114,20 @@ class Window {
     func refreshThumbnail(_ screenshot: CALayerContents) {
         thumbnail = screenshot
         if cgWindowId == DockAltTabWaitForWindow {} else {
-            if !App.app.appIsBeingUsed || !shouldShowTheUser { return }
+            if !App.appIsBeingUsed || !shouldShowTheUser { return }
         }
         if let position, let size,
-           let view = (ThumbnailsView.recycledViews.first { $0.window_?.cgWindowId == cgWindowId }) {
+           let view = (TilesView.recycledViews.first { $0.window_?.cgWindowId == cgWindowId }) {
             if !view.thumbnail.isHidden {
-                let thumbnailSize = ThumbnailView.thumbnailSize(screenshot.size(), false)
+                let thumbnailSize = TileView.thumbnailSize(size, false)
                 let newSize = thumbnailSize.width != view.thumbnail.frame.width || thumbnailSize.height != view.thumbnail.frame.height
                 view.thumbnail.updateContents(screenshot, thumbnailSize)
                 // if the thumbnail size has changed, we need to refresh the open UI
                 if newSize || DockAltTabWaitForWindow != 0 {
-                    App.app.refreshOpenUi([], .refreshOnlyThumbnailsAfterShowUi)
+                    App.refreshOpenUiAfterExternalEvent([])
                 }
             }
-            App.app.previewPanel.updateIfShowing(cgWindowId, screenshot, position, size)
+            PreviewPanel.updateIfShowing(cgWindowId, screenshot, position, size)
         }
     }
 
@@ -263,20 +272,24 @@ class Window {
 
     private func updateSpaces() {
         guard let cgWindowId else { return }
-        let spaceIds = cgWindowId.spaces()
+        var spaceIds = cgWindowId.spaces()
+        // inactive tabs return no space from CGSCopySpacesForWindows; use the active tab sibling's space
+        if spaceIds.isEmpty, let activeTab = TabGroup.activeTabSibling(of: self) {
+            spaceIds = activeTab.spaceIds
+        }
         self.spaceIds = spaceIds
         self.spaceIndexes = spaceIds.compactMap { spaceId in Spaces.idsAndIndexes.first { $0.0 == spaceId }?.1 }
         self.isOnAllSpaces = spaceIds.count > 1
     }
 
     private func updateScreenId() {
-        screenId = NSScreen.screens.first { isOnScreen($0) }?.uuid()
+        screenId = NSScreen.screens.first { isOnScreen($0) }?.cachedUuid()
     }
 
     /// window may not be visible on that screen (e.g. the window is not on the current Space)
     func isOnScreen(_ screen: NSScreen) -> Bool {
         if NSScreen.screensHaveSeparateSpaces {
-            if let screenUuid = screen.uuid(), let screenSpaces = Spaces.screenSpacesMap[screenUuid] {
+            if let screenUuid = screen.cachedUuid(), let screenSpaces = Spaces.screenSpacesMap[screenUuid] {
                 return screenSpaces.contains { screenSpace in spaceIds.contains { $0 == screenSpace } }
             }
         } else {
@@ -294,9 +307,8 @@ class Window {
     func referenceWindowForTabbedWindow() -> Window? {
         // if the window is tabbed, we can't know its position/size before it's focused, so we use the currently
         // visible window-tab. Its data will match the tabbed window's
-        // TODO: handle the case where the app has multiple window-groups. In that case, we need to find the right
-        //       window-group, instead of picking the focused one
-        return isTabbed ? application.focusedWindow : self
+        // fallback to the focusedWindow
+        isTabbed ? (TabGroup.activeTabSibling(of: self) ?? application.focusedWindow) : self
     }
 
     // Determines if this window is the main application window
@@ -310,19 +322,27 @@ class Window {
 
     private func altTabWindow() -> NSWindow? {
         if application.bundleURL == App.bundleURL, let cgWindowId {
-            return App.app.window(withWindowNumber: Int(cgWindowId))
+            return App.shared.window(withWindowNumber: Int(cgWindowId))
         }
         return nil
     }
 
-    /// some apps will not trigger AXApplicationActivated, where we usually update application.focusedWindow
-    /// workaround: we check and possibly do it here
+    /// Scenarios addressed by this:
+    /// * Some apps will not trigger AXApplicationActivated, where we usually update application.focusedWindow
+    /// * Sometimes, we subscribe to an app after it has emitted the focusedWindow / applicationActivated events, so we never receive these
     private func checkIfFocused() {
-        AXUIElement.retryAxCallUntilTimeout(context: debugId(), pid: application.pid, callType: .updateWindow) { [weak self] in
-            guard let self,
-                  let focusedWindow = try self.application.axUiElement?.attributes([kAXFocusedWindowAttribute]).focusedWindow,
-                  let window = try (Windows.list.first { $0.isEqualRobust(focusedWindow, (try focusedWindow.cgWindowId())) }) else { return }
-            self.application.focusedWindow = window
+        let app = application
+        guard let appAxUiElement = app.axUiElement else { return }
+        AXCallScheduler.shared.schedule(key: "wid-\(cgWindowId)-focus", context: debugId, pid: app.pid) { [weak app] in
+            guard let app, let focusedWindow = try appAxUiElement.attributes([kAXFocusedWindowAttribute]).focusedWindow else { return }
+            let focusedWid = try focusedWindow.cgWindowId()
+            DispatchQueue.main.async {
+                guard let window = (Windows.list.first { $0.isEqualRobust(focusedWindow, focusedWid) }) else { return }
+                app.focusedWindow = window
+                if let windows = Windows.updateLastFocusOrder(window) {
+                    App.refreshOpenUiAfterExternalEvent(windows)
+                }
+            }
         }
     }
 }
