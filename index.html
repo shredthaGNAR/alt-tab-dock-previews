@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AltTab Dock Previews</title>
+<meta name="description" content="Window previews for your macOS Dock, built into AltTab. One app instead of AltTab plus DockAltTab.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%230a84ff'/%3E%3Crect x='14' y='18' width='16' height='12' rx='3' fill='white'/%3E%3Crect x='34' y='18' width='16' height='12' rx='3' fill='white' opacity='.7'/%3E%3Crect x='14' y='40' width='36' height='8' rx='4' fill='white' opacity='.9'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #fbfbfd;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --border: rgba(0, 0, 0, 0.08);
+  --accent: #0a84ff;
+  --accent-text: #ffffff;
+  --code-bg: #f0f0f3;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --wall-1: #c9d8ff;
+  --wall-2: #f3d7f0;
+  --wall-3: #ffe9cc;
+  --dock: rgba(255, 255, 255, 0.55);
+  --panel: rgba(250, 250, 252, 0.92);
+  --win: #ffffff;
+  --win-bar: #ececf0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0b0d;
+    --surface: #161618;
+    --surface-2: #1c1c1f;
+    --text: #f5f5f7;
+    --muted: #a1a1a6;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #0a84ff;
+    --code-bg: #1f1f23;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --wall-1: #1d2a55;
+    --wall-2: #3a1f45;
+    --wall-3: #4a2f1c;
+    --dock: rgba(40, 40, 46, 0.6);
+    --panel: rgba(36, 36, 40, 0.92);
+    --win: #2a2a2e;
+    --win-bar: #34343a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0b0d;
+  --surface: #161618;
+  --surface-2: #1c1c1f;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --border: rgba(255, 255, 255, 0.1);
+  --code-bg: #1f1f23;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --wall-1: #1d2a55;
+  --wall-2: #3a1f45;
+  --wall-3: #4a2f1c;
+  --dock: rgba(40, 40, 46, 0.6);
+  --panel: rgba(36, 36, 40, 0.92);
+  --win: #2a2a2e;
+  --win-bar: #34343a;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+
+header.top {
+  position: sticky; top: 0; z-index: 10;
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); }
+.brand:hover { text-decoration: none; }
+.brand svg { width: 26px; height: 26px; flex: none; }
+nav.links { display: flex; gap: 20px; font-size: 14px; }
+nav.links a { color: var(--muted); }
+nav.links a:hover { color: var(--text); text-decoration: none; }
+@media (max-width: 640px) { nav.links .hide-sm { display: none; } }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 999px;
+  font-weight: 500; font-size: 15px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+}
+.btn:hover { text-decoration: none; filter: brightness(0.97); }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.btn svg { width: 18px; height: 18px; }
+
+.hero { padding: 72px 0 40px; text-align: center; }
+.eyebrow { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 4px 12px; border-radius: 999px; }
+.hero h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.05; letter-spacing: -0.025em; margin: 18px auto 16px; max-width: 14ch; }
+.hero p.lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 40ch; margin: 0 auto 28px; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* illustrative desktop */
+.stage { margin: 48px auto 0; max-width: 880px; }
+.desktop {
+  position: relative; height: 380px; border-radius: 18px; overflow: hidden;
+  background: radial-gradient(120% 90% at 10% 0%, var(--wall-1), transparent 60%),
+              radial-gradient(100% 90% at 90% 10%, var(--wall-2), transparent 60%),
+              radial-gradient(120% 100% at 50% 100%, var(--wall-3), transparent 70%),
+              var(--surface-2);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.menubar { height: 24px; background: color-mix(in srgb, var(--surface) 55%, transparent); backdrop-filter: blur(10px); }
+.dock {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; align-items: flex-end; gap: 10px; padding: 8px 12px;
+  background: var(--dock); border: 1px solid var(--border); border-radius: 18px;
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+}
+.icon {
+  width: 44px; height: 44px; border-radius: 11px; position: relative; cursor: pointer;
+  transition: transform .18s ease, width .18s ease, height .18s ease;
+  display: grid; place-items: center; color: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+}
+.icon svg { width: 24px; height: 24px; }
+.icon.running::after { content: ""; position: absolute; bottom: -6px; left: 50%; width: 4px; height: 4px; border-radius: 50%; background: var(--text); opacity: .55; transform: translateX(-50%); }
+.icon.active { transform: translateY(-6px) scale(1.18); }
+.panel {
+  position: absolute; bottom: 82px; display: flex; gap: 10px; padding: 10px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  transition: left .2s ease, opacity .2s ease, transform .2s ease;
+  transform-origin: bottom center;
+}
+.panel.hidden { opacity: 0; transform: translateY(6px) scale(.98); pointer-events: none; }
+.thumb { width: 150px; }
+.thumb .win { height: 94px; border-radius: 8px; background: var(--win); border: 1px solid var(--border); overflow: hidden; }
+.thumb .bar { height: 14px; background: var(--win-bar); display: flex; gap: 4px; align-items: center; padding: 0 6px; }
+.thumb .bar i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.thumb .bar i:nth-child(1) { background: #ff5f57; } .thumb .bar i:nth-child(2) { background: #febc2e; } .thumb .bar i:nth-child(3) { background: #28c840; }
+.thumb .body { padding: 8px; display: grid; gap: 5px; }
+.thumb .body span { height: 6px; border-radius: 3px; background: var(--border); display: block; }
+.thumb .body span:nth-child(1) { width: 70%; } .thumb .body span:nth-child(2) { width: 90%; } .thumb .body span:nth-child(3) { width: 55%; }
+.thumb .title { font-size: 11px; color: var(--muted); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.thumb.selected .win { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stage-caption { text-align: center; color: var(--muted); font-size: 13px; margin-top: 12px; }
+@media (max-width: 640px) {
+  .desktop { height: 300px; }
+  .thumb { width: 96px; } .thumb .win { height: 62px; }
+  .icon { width: 34px; height: 34px; border-radius: 9px; } .icon svg { width: 18px; height: 18px; }
+  .dock { gap: 7px; padding: 6px 9px; }
+  .panel { bottom: 66px; gap: 6px; padding: 7px; }
+}
+
+section { padding: 72px 0; }
+section h2 { font-size: clamp(26px, 4vw, 38px); letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 12px; }
+section p.sub { color: var(--muted); font-size: 18px; margin: 0 0 36px; max-width: 60ch; }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .compare { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); }
+.card h3 { margin: 0 0 6px; font-size: 18px; }
+.card .tag { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.card ul { margin: 14px 0 0; padding-left: 20px; color: var(--muted); }
+.card ul li { margin: 6px 0; }
+.card.after { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.card.after .tag { color: var(--accent); }
+
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+.feature .glyph { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); margin-bottom: 14px; }
+.feature .glyph svg { width: 20px; height: 20px; }
+.feature p { color: var(--muted); margin: 0; font-size: 15px; }
+
+.steps { counter-reset: step; display: grid; gap: 16px; }
+.step { position: relative; padding-left: 52px; }
+.step::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 600; display: grid; place-items: center; }
+.step h3 { margin: 4px 0 6px; font-size: 18px; }
+.step p { margin: 0 0 10px; color: var(--muted); }
+.code { position: relative; background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; }
+.code pre { margin: 0; padding: 14px 64px 14px 16px; overflow-x: auto; font: 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre; }
+.copy { position: absolute; top: 8px; right: 8px; font: 12px/1 inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.note { font-size: 14px; color: var(--muted); margin-top: 10px; }
+
+.settings { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.setting { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; border-top: 1px solid var(--border); }
+.setting:first-child { border-top: 0; }
+.setting small { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+.switch { width: 38px; height: 22px; border-radius: 999px; background: #34c759; position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.switch.off { background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.switch.off::after { right: auto; left: 2px; }
+
+.limits { color: var(--muted); padding-left: 20px; }
+.limits li { margin: 8px 0; }
+
+footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#0a84ff"/><rect x="14" y="18" width="16" height="12" rx="3" fill="#fff"/><rect x="34" y="18" width="16" height="12" rx="3" fill="#fff" opacity=".7"/><rect x="14" y="40" width="36" height="8" rx="4" fill="#fff" opacity=".9"/></svg>
+      AltTab Dock Previews
+    </a>
+    <nav class="links">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#install">Install</a>
+      <a class="hide-sm" href="#settings">Settings</a>
+      <a href="https://github.com/shredthaGNAR/alt-tab-dock-previews">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <span class="eyebrow">AltTab + DockAltTab, in one app</span>
+    <h1>Window previews for your Dock.</h1>
+    <p class="lede">Hover any running app in the macOS Dock to see its windows, just like on Windows. It's built straight into AltTab, so there's no second app to run.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/shredthaGNAR/alt-tab-dock-previews">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+      <a class="btn" href="#install">Build it yourself</a>
+    </div>
+
+    <div class="stage" aria-hidden="true">
+      <div class="desktop" id="desktop">
+        <div class="menubar"></div>
+        <div class="panel hidden" id="panel"></div>
+        <div class="dock" id="dock">
+          <div class="icon running" data-app="Finder" data-windows="Documents,Downloads,Desktop" style="background:linear-gradient(#5ac8fa,#007aff)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 8v3M15 8v3M8 16c2.5 2 5.5 2 8 0"/></svg></div>
+          <div class="icon running" data-app="Safari" data-windows="Apple,GitHub" style="background:linear-gradient(#64d2ff,#0a84ff)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M15 9l-2 4-4 2 2-4z" fill="currentColor"/></svg></div>
+          <div class="icon running" data-app="Mail" data-windows="Inbox" style="background:linear-gradient(#7fc4ff,#2f7cf6)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 8l8 5 8-5"/></svg></div>
+          <div class="icon running" data-app="Notes" data-windows="Ideas,Groceries,Meeting" style="background:linear-gradient(#ffe066,#ffb800)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 8h10M7 12h10M7 16h6"/></svg></div>
+          <div class="icon running" data-app="Terminal" data-windows="zsh,ssh" style="background:linear-gradient(#4a4a4f,#1c1c1e)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4-4 4M12 16h6"/></svg></div>
+          <div class="icon" data-app="Music" style="background:linear-gradient(#ff6b81,#fa2d48)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 17V6l10-2v11"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="15" r="2"/></svg></div>
+        </div>
+      </div>
+      <p class="stage-caption">Illustration. Hover the icons; apps with a dot are running.</p>
+    </div>
+  </div>
+
+  <section id="why">
+    <div class="wrap">
+      <h2>One app instead of two.</h2>
+      <p class="sub">DockAltTab used to drive a special build of AltTab from the outside, sending it AppleScript commands as your pointer moved. This build moves DockAltTab's logic inside AltTab itself.</p>
+      <div class="compare">
+        <div class="card">
+          <span class="tag">Before</span>
+          <h3>AltTab + DockAltTab</h3>
+          <ul>
+            <li>Two apps to install, update and grant permissions to</li>
+            <li>Every hover sent an AppleScript command to AltTab</li>
+            <li>Window counts polled over AppleScript every 1–2 seconds</li>
+            <li>Hovering an app with nothing to show could crash AltTab</li>
+          </ul>
+        </div>
+        <div class="card after">
+          <span class="tag">Now</span>
+          <h3>AltTab Dock Previews</h3>
+          <ul>
+            <li>One app with one set of permissions</li>
+            <li>Previews are shown directly, with no AppleScript in between</li>
+            <li>Window counts read the moment you click</li>
+            <li>Only the Dock is queried, so a frozen app can't stall it</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" style="padding-top:0">
+    <div class="wrap">
+      <h2>What it does.</h2>
+      <p class="sub">Everything you know from AltTab, plus the Dock behaviour from DockAltTab.</p>
+      <div class="grid">
+        <div class="card feature">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="8" height="6" rx="1.5"/><rect x="13" y="4" width="8" height="6" rx="1.5"/><rect x="6" y="15" width="12" height="5" rx="2.5"/></svg></div>
+          <h3>Hover previews</h3>
+          <p>Rest on a running app's Dock icon and its windows appear right above it. Move up onto them and click one to switch.</p>
+        </div>
+        <div class="card feature">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></svg></div>
+          <h3>Full-size window preview</h3>
+          <p>With AltTab's "Preview selected window" turned on, pausing on a thumbnail shows that window at full size.</p>
+        </div>
+        <div class="card feature">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v4M9 4l-3 3M9 4l3 3"/><rect x="4" y="12" width="16" height="8" rx="2"/></svg></div>
+          <h3>Windows-style clicks</h3>
+          <p>Click an active app's icon to hide it, and click again to bring it back. Windows on other Spaces stay where they are, so clicking never switches Space.</p>
+        </div>
+        <div class="card feature">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="15" width="18" height="5" rx="2.5"/><path d="M12 4v7M9 8l3 3 3-3"/></svg></div>
+          <h3>Works with auto-hide</h3>
+          <p>An auto-hiding Dock stays visible while you're in the previews. Your setting comes back on when you leave, even if AltTab crashed or was force-quit.</p>
+        </div>
+        <div class="card feature">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M14 5l-4 14"/></svg></div>
+          <h3>Still scriptable</h3>
+          <p>The AppleScript commands from the scriptable AltTab (<code>showApp</code>, <code>countAllWindowStats</code> and the rest) still work, and now run the same code as the Dock previews.</p>
+        </div>
+        <div class="card feature">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 3L5 14h6l-1 7 8-11h-6z" stroke-linejoin="round"/></svg></div>
+          <h3>Light on resources</h3>
+          <p>It only checks what's under the pointer when the pointer is near the Dock. Everywhere else, mouse movement costs next to nothing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" style="padding-top:0">
+    <div class="wrap">
+      <h2>Build it yourself.</h2>
+      <p class="sub">There's no notarized download yet. Building takes a few minutes with Xcode installed.</p>
+      <div class="steps">
+        <div class="step">
+          <h3>Get the source</h3>
+          <p>Clone this repository's <code>dock-previews</code> branch.</p>
+          <div class="code"><pre>git clone -b dock-previews https://github.com/shredthaGNAR/alt-tab-dock-previews.git
+cd alt-tab-dock-previews</pre><button class="copy" type="button">Copy</button></div>
+        </div>
+        <div class="step">
+          <h3>Build</h3>
+          <p>This signs the app ad-hoc, so you don't need an Apple developer certificate.</p>
+          <div class="code"><pre>xcodebuild -workspace alt-tab-macos.xcworkspace -scheme Debug -configuration Debug -derivedDataPath ../DerivedData CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" build</pre><button class="copy" type="button">Copy</button></div>
+        </div>
+        <div class="step">
+          <h3>Run</h3>
+          <p>Quit DockAltTab and any other AltTab first, then open the new build and grant Accessibility and Screen Recording when asked.</p>
+          <div class="code"><pre>open ../DerivedData/Build/Products/Debug/AltTab.app</pre><button class="copy" type="button">Copy</button></div>
+          <p class="note">With ad-hoc signing, macOS treats every rebuild as a new app. Remove the old AltTab entry under System Settings → Privacy &amp; Security → Accessibility before granting it again.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="settings" style="padding-top:0">
+    <div class="wrap">
+      <h2>Settings.</h2>
+      <p class="sub">Open AltTab's settings, then Controls → Additional controls… → Dock previews.</p>
+      <div class="settings">
+        <div class="setting"><div>Show windows when hovering an app in the Dock<small>Turns Dock previews on or off.</small></div><span class="switch"></span></div>
+        <div class="setting"><div>Clicking an active app in the Dock hides it<small>Windows-style toggle. Turn it off to keep the normal macOS Dock click.</small></div><span class="switch"></span></div>
+        <div class="setting"><div>Keep an auto-hiding Dock visible while previewing<small>Temporarily turns off the Dock's auto-hide while you're in the previews.</small></div><span class="switch"></span></div>
+        <div class="setting"><div>Preview selected window<small>AltTab's own setting under Appearance. Also controls the full-size preview when you hover a Dock thumbnail.</small></div><span class="switch off"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="limits" style="padding-top:0">
+    <div class="wrap">
+      <h2>Good to know.</h2>
+      <ul class="limits">
+        <li>The Dock drops magnification as soon as the pointer leaves it. That's macOS behaviour, and the previews stay where they first appeared.</li>
+        <li>With the click toggle on, you can't drag the Dock icon of an app that has open windows. DockAltTab behaves the same way.</li>
+        <li>DockAltTab's Ubuntu mode (click to preview), its preview-gap setting, and its Finder and Firefox picture-in-picture workarounds aren't included yet.</li>
+        <li>Only the macOS/Windows-style hover modes are ported. If you rely on the standalone DockAltTab app, it still works with this build over AppleScript. Just don't run both at once.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Built on <a href="https://github.com/lwouis/alt-tab-macos">AltTab</a> by lwouis, and on <a href="https://github.com/steventheworker/alt-tab-macos">scriptable AltTab</a> and <a href="https://github.com/steventheworker/DockAltTab">DockAltTab</a> by steventheworker.</span>
+    <span>Licensed under <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a>. Not affiliated with Apple.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  document.querySelectorAll(".copy").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var text = button.parentElement.querySelector("pre").textContent;
+      var done = function () { button.textContent = "Copied"; setTimeout(function () { button.textContent = "Copy"; }, 1500); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+
+  var desktop = document.getElementById("desktop");
+  var panel = document.getElementById("panel");
+  var icons = Array.prototype.slice.call(document.querySelectorAll(".icon"));
+  var hideTimer;
+
+  function show(icon) {
+    clearTimeout(hideTimer);
+    icons.forEach(function (i) { i.classList.toggle("active", i === icon); });
+    var windows = (icon.dataset.windows || "").split(",").filter(Boolean);
+    if (!windows.length) return hide();
+    panel.innerHTML = windows.map(function (title, index) {
+      return '<div class="thumb' + (index === 0 ? " selected" : "") + '"><div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="body"><span></span><span></span><span></span></div></div><div class="title">' + icon.dataset.app + " — " + title + "</div></div>";
+    }).join("");
+    panel.querySelectorAll(".thumb").forEach(function (thumb) {
+      thumb.addEventListener("mouseenter", function () {
+        panel.querySelectorAll(".thumb").forEach(function (t) { t.classList.toggle("selected", t === thumb); });
+      });
+    });
+    var stage = desktop.getBoundingClientRect();
+    var box = icon.getBoundingClientRect();
+    panel.classList.remove("hidden");
+    var width = panel.offsetWidth;
+    var left = box.left - stage.left + box.width / 2 - width / 2;
+    panel.style.left = Math.max(8, Math.min(left, stage.width - width - 8)) + "px";
+  }
+
+  function hide() {
+    icons.forEach(function (i) { i.classList.remove("active"); });
+    panel.classList.add("hidden");
+  }
+
+  icons.forEach(function (icon) {
+    icon.addEventListener("mouseenter", function () { show(icon); });
+    icon.addEventListener("click", function () { show(icon); });
+  });
+  panel.addEventListener("mouseenter", function () { clearTimeout(hideTimer); });
+  desktop.addEventListener("mouseleave", function () { hideTimer = setTimeout(hide, 250); });
+  document.getElementById("dock").addEventListener("mouseleave", function (event) {
+    if (!panel.contains(event.relatedTarget)) hideTimer = setTimeout(hide, 250);
+  });
+  panel.addEventListener("mouseleave", function (event) {
+    if (!event.relatedTarget || !event.relatedTarget.closest || !event.relatedTarget.closest(".icon")) hideTimer = setTimeout(hide, 250);
+  });
+
+  requestAnimationFrame(function () { show(icons[3]); });
+  window.addEventListener("resize", function () {
+    var active = icons.filter(function (i) { return i.classList.contains("active"); })[0];
+    if (active) show(active);
+  });
+})();
+</script>
+</body>
+</html>
