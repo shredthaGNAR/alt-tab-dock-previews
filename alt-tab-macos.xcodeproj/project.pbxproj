@@ -301,6 +301,9 @@
 		D04BAB68B7B8D1B548BC3AD5 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BAAB92261FC04854FDDE9 /* App.swift */; };
 		D04BABD613F88C27E720F316 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = D04BA863BC6929EB0A2AC590 /* InfoPlist.strings */; };
 		D04BABED81800E18732912CC /* CGWindowID.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA03200F5A8FC0CD03607 /* CGWindowID.swift */; };
+		DA7D0C000000000000000002 /* DockPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000001 /* DockPreviews.swift */; };
+		DA7D0C000000000000000004 /* DockGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000003 /* DockGeometry.swift */; };
+		DA7D0C000000000000000006 /* DockAltTabActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000005 /* DockAltTabActions.swift */; };
 		D04BABEECBC6D922298BC93A /* Spaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA7CF9C2D1BEC7C05AB24 /* Spaces.swift */; };
 		D04BAC011A71E0418154F8CD /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA9B93823398A542FF7A0 /* Preferences.swift */; };
 		D04BAC23045A0A119B527DEB /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = D04BA1BF6225E8B19676670A /* InfoPlist.strings */; };
@@ -714,6 +717,9 @@
 		D04BA7C25BD7B68BCEEE38B5 /* en */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = en; path = Localizable.strings; sourceTree = "<group>"; };
 		D04BA7C6F2519091717F4B4E /* SystemPermissions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SystemPermissions.swift; sourceTree = "<group>"; };
 		D04BA7C836A8CE8C0B8D128B /* TextArea.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextArea.swift; sourceTree = "<group>"; };
+		DA7D0C000000000000000001 /* DockPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockPreviews.swift; sourceTree = "<group>"; };
+		DA7D0C000000000000000003 /* DockGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockGeometry.swift; sourceTree = "<group>"; };
+		DA7D0C000000000000000005 /* DockAltTabActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockAltTabActions.swift; sourceTree = "<group>"; };
 		D04BA7CF9C2D1BEC7C05AB24 /* Spaces.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Spaces.swift; sourceTree = "<group>"; };
 		D04BA7E388B365A41C92E31B /* safari-pinned-tab.svg */ = {isa = PBXFileReference; lastKnownFileType = file.svg; path = "safari-pinned-tab.svg"; sourceTree = "<group>"; };
 		D04BA7E3EA104941FE76DA70 /* AppCenterCrashes.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppCenterCrashes.swift; sourceTree = "<group>"; };
@@ -1461,6 +1467,16 @@
 			path = it.lproj;
 			sourceTree = "<group>";
 		};
+		DA7D0C000000000000000000 /* dock-previews */ = {
+			isa = PBXGroup;
+			children = (
+				DA7D0C000000000000000001 /* DockPreviews.swift */,
+				DA7D0C000000000000000003 /* DockGeometry.swift */,
+				DA7D0C000000000000000005 /* DockAltTabActions.swift */,
+			);
+			path = "dock-previews";
+			sourceTree = "<group>";
+		};
 		D04BA0D80B24E72B9B981A1D /* logic */ = {
 			isa = PBXGroup;
 			children = (
@@ -1479,6 +1495,7 @@
 				D04BAB74451B79FE18B8BEDF /* BackgroundWork.swift */,
 				D04BACABD048E62EBE4576CC /* DebugProfile.swift */,
 				D04BAC8857A527C2E15D6598 /* events */,
+				DA7D0C000000000000000000 /* dock-previews */,
 				F00DCAFE0000000000002000 /* search */,
 				D04BA7E3EA104941FE76DA70 /* AppCenterCrashes.swift */,
 				BF0C8BA452332236D972C60E /* ATShortcut.swift */,
@@ -2629,6 +2646,9 @@
 				BFEA01172ABE84740000F1AE /* deminimizeFirstMinimizedWindowFromCurrentSpace.swift in Sources */,
 				D04BADCDA9F9A6C3D6499877 /* SystemPermissions.swift in Sources */,
 				D04BABEECBC6D922298BC93A /* Spaces.swift in Sources */,
+				DA7D0C000000000000000002 /* DockPreviews.swift in Sources */,
+				DA7D0C000000000000000004 /* DockGeometry.swift in Sources */,
+				DA7D0C000000000000000006 /* DockAltTabActions.swift in Sources */,
 				D04BA6187A91A847844B6ABB /* Window.swift in Sources */,
 				5F21C9E82C6E96A00091F72F /* SheetWindow.swift in Sources */,
 				D04BA737008AA2CD4E230A21 /* Application.swift in Sources */,

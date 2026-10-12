@@ -25,7 +25,18 @@ class AdditionalControlsSheet: SheetWindow {
             width: SheetWindow.width)
         _ = table2.addRow(enableCursorFollowFocus)
         _ = table2.addRow(enableTrackpadHapticFeedback)
-        let view = TableGroupSetView(originalViews: [table1, table2], padding: 0)
+        let view = TableGroupSetView(originalViews: [table1, table2, makeDockPreviewsTable()], padding: 0)
         return view
+    }
+
+    private func makeDockPreviewsTable() -> TableGroupView {
+        let table = TableGroupView(title: NSLocalizedString("Dock previews", comment: ""), width: SheetWindow.width)
+        _ = table.addRow(TableGroupView.Row(leftTitle: NSLocalizedString("Show windows when hovering an app in the Dock", comment: ""),
+            rightViews: [LabelAndControl.makeSwitch("dockPreviewsEnabled")]))
+        _ = table.addRow(TableGroupView.Row(leftTitle: NSLocalizedString("Clicking an active app in the Dock hides it", comment: ""),
+            rightViews: [LabelAndControl.makeSwitch("dockPreviewsClickToggles")]))
+        _ = table.addRow(TableGroupView.Row(leftTitle: NSLocalizedString("Keep an auto-hiding Dock visible while previewing", comment: ""),
+            rightViews: [LabelAndControl.makeSwitch("dockPreviewsKeepDockShowing")]))
+        return table
     }
 }

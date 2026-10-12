@@ -382,6 +382,7 @@ class App: AppCenterApplication {
         Applications.initialDiscovery()
         KeyboardEvents.addEventHandlers()
         CursorEvents.observe()
+        DockPreviews.observe()
         TrackpadEvents.observe()
         CliEvents.observe()
         PreferencesEvents.initialize()
@@ -424,6 +425,7 @@ extension App: NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // symbolic hotkeys state persist after the app is quit; we restore this shortcut before quitting
         setNativeCommandTabEnabled(true)
+        DockPreviews.restoreDock()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

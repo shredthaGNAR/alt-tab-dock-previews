@@ -75,7 +75,7 @@ class Windows {
 
     static func previewSelectedWindowIfNeeded() {
         if App.appIsBeingUsed && ScreenRecordingPermission.status == .granted
-               && (Preferences.previewSelectedWindow || DockAltTabWaitForWindow != 0) && !Preferences.onlyShowApplications()
+               && (DockAltTabMode ? DockAltTabWaitForWindow != 0 : (Preferences.previewSelectedWindow || DockAltTabWaitForWindow != 0)) && !Preferences.onlyShowApplications()
                && TilesPanel.shared.isKeyWindow,
            let window = selectedWindow(),
            let id = window.cgWindowId,

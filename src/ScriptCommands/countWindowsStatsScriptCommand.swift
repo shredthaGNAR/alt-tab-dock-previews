@@ -51,33 +51,11 @@ class countWindowStatsScriptCommand: NSScriptCommand {
             )
         }
 
-        let pid = tarApp.processIdentifier
-
-        var all = 0
-        var cur = 0
-        var minCur = 0
-
-        for window in Windows.list {
-            guard window.application.runningApplication.processIdentifier == pid else { continue }
-            guard !window.isWindowlessApp else { continue }
-
-            all += 1
-
-            let inVisibleSpace =
-                window.spaceIds.contains { Spaces.visibleSpaces.contains($0) }
-
-            if inVisibleSpace {
-                cur += 1
-                if window.isMinimized {
-                    minCur += 1
-                }
-            }
-        }
-
+        let stats = DockAltTabActions.windowStats(tarApp.processIdentifier)
         return makeStatsRecord(
-            countWindows: all,
-            countWindowsCurrentSpace: cur,
-            countMinimizedWindowsCurrentSpace: minCur
+            countWindows: stats.all,
+            countWindowsCurrentSpace: stats.currentSpace,
+            countMinimizedWindowsCurrentSpace: stats.minimizedCurrentSpace
         )
     }
 }

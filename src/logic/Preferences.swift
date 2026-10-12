@@ -51,6 +51,10 @@ class Preferences {
             "screenRecordingPermissionSkipped": "false",
             "trackpadHapticFeedbackEnabled": "true",
             "settingsWindowShownOnFirstLaunch": "false",
+            "dockPreviewsEnabled": "true",
+            "dockPreviewsClickToggles": "true",
+            "dockPreviewsKeepDockShowing": "true",
+            "dockPreviewsWindowPreviewDelay": "500",
         ]
         (0..<maxShortcutCount).forEach { index in
             values[indexToName("holdShortcut", index)] = defaultShortcut("⌥")
@@ -119,6 +123,10 @@ class Preferences {
     static var captureWindowsInBackground: Bool { CachedUserDefaults.bool("captureWindowsInBackground") }
     static var screenRecordingPermissionSkipped: Bool { CachedUserDefaults.bool("screenRecordingPermissionSkipped") }
     static var settingsWindowShownOnFirstLaunch: Bool { CachedUserDefaults.bool("settingsWindowShownOnFirstLaunch") }
+    static var dockPreviewsEnabled: Bool { CachedUserDefaults.bool("dockPreviewsEnabled") }
+    static var dockPreviewsClickToggles: Bool { CachedUserDefaults.bool("dockPreviewsClickToggles") }
+    static var dockPreviewsKeepDockShowing: Bool { CachedUserDefaults.bool("dockPreviewsKeepDockShowing") }
+    static var dockPreviewsWindowPreviewDelay: Int { CachedUserDefaults.int("dockPreviewsWindowPreviewDelay") }
 
     // macro values
     static var appearanceStyle: AppearanceStylePreference { CachedUserDefaults.macroPref("appearanceStyle", AppearanceStylePreference.allCases) }

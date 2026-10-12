@@ -56,6 +56,8 @@ class PreferencesEvents {
         case "nextWindowGesture": TrackpadEvents.toggle(Preferences.nextWindowGesture != .disabled)
         case "startAtLogin": applyStartAtLoginPreference()
         case "updatePolicy": applyUpdatePolicyPreference()
+        case "dockPreviewsEnabled": DockPreviews.toggle(Preferences.dockPreviewsEnabled)
+        case "dockPreviewsKeepDockShowing": if !Preferences.dockPreviewsKeepDockShowing { DockPreviews.restoreDock() }
         case let k where preferencesRequiringUiReset.contains(k) && TilesPanel.shared != nil: App.resetPreferencesDependentComponents()
         default: break
         }
