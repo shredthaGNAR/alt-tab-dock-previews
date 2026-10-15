@@ -51,7 +51,7 @@
 	<key>SUEnableJavaScript</key>
 	<string>true</string>
 	<key>SUFeedURL</key>
-	<string>https://dockalttab.netlify.app/appcast-AltTab.xml</string>
+	<string>https://shredthagnar.github.io/alt-tab-dock-previews/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>3LY7vHMUnCLZM+y9fvFSPe/RDU3kawtqlHEh45JTW54=</string>
 	<key>SUScheduledCheckInterval</key>

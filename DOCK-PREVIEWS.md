@@ -22,6 +22,18 @@ Fixes compared with running the two apps together:
 - The "pointer moved to another icon" check on Dock clicks now works.
 - Window counts are read directly instead of being polled over AppleScript.
 
+## Download
+
+Get `AltTab-Dock-Previews.dmg` from the [latest release](https://github.com/shredthaGNAR/alt-tab-dock-previews/releases/latest), open it and drag AltTab into Applications. It runs on Apple silicon and Intel Macs with macOS 12 or later.
+
+The app isn't notarized, so macOS blocks it the first time you open it:
+- **macOS 15 Sequoia or later:** click Done on the warning, then go to System Settings → Privacy & Security and click **Open Anyway** next to AltTab.
+- **macOS 14 Sonoma or earlier:** Control-click AltTab in Applications and choose Open.
+
+To make the DMG yourself, run `scripts/make_dmg.sh` from the repository root. It writes `dist/AltTab-Dock-Previews.dmg`.
+
+Update checks go to this fork's own feed (`appcast.xml` on the website) rather than DockAltTab's, so installing doesn't pull in an update that removes the Dock previews.
+
 ## Build
 
 ```bash
