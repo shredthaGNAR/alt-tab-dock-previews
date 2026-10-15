@@ -37,6 +37,8 @@ class AdditionalControlsSheet: SheetWindow {
             rightViews: [LabelAndControl.makeSwitch("dockPreviewsClickToggles")]))
         _ = table.addRow(TableGroupView.Row(leftTitle: NSLocalizedString("Keep an auto-hiding Dock visible while previewing", comment: ""),
             rightViews: [LabelAndControl.makeSwitch("dockPreviewsKeepDockShowing")]))
+        _ = table.addRow(TableGroupView.Row(leftTitle: NSLocalizedString("Make AltTab the active app while previewing (for BetterTouchTool gestures)", comment: ""),
+            rightViews: [LabelAndControl.makeSwitch("dockPreviewsActivateAltTab")]))
         return table
     }
 }

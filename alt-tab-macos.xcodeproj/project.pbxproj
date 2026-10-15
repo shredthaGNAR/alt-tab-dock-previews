@@ -301,6 +301,7 @@
 		D04BAB68B7B8D1B548BC3AD5 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BAAB92261FC04854FDDE9 /* App.swift */; };
 		D04BABD613F88C27E720F316 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = D04BA863BC6929EB0A2AC590 /* InfoPlist.strings */; };
 		D04BABED81800E18732912CC /* CGWindowID.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA03200F5A8FC0CD03607 /* CGWindowID.swift */; };
+		DA7D0C000000000000000008 /* DockPreviewShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000007 /* DockPreviewShortcuts.swift */; };
 		DA7D0C000000000000000002 /* DockPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000001 /* DockPreviews.swift */; };
 		DA7D0C000000000000000004 /* DockGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000003 /* DockGeometry.swift */; };
 		DA7D0C000000000000000006 /* DockAltTabActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7D0C000000000000000005 /* DockAltTabActions.swift */; };
@@ -717,6 +718,7 @@
 		D04BA7C25BD7B68BCEEE38B5 /* en */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = en; path = Localizable.strings; sourceTree = "<group>"; };
 		D04BA7C6F2519091717F4B4E /* SystemPermissions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SystemPermissions.swift; sourceTree = "<group>"; };
 		D04BA7C836A8CE8C0B8D128B /* TextArea.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextArea.swift; sourceTree = "<group>"; };
+		DA7D0C000000000000000007 /* DockPreviewShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockPreviewShortcuts.swift; sourceTree = "<group>"; };
 		DA7D0C000000000000000001 /* DockPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockPreviews.swift; sourceTree = "<group>"; };
 		DA7D0C000000000000000003 /* DockGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockGeometry.swift; sourceTree = "<group>"; };
 		DA7D0C000000000000000005 /* DockAltTabActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockAltTabActions.swift; sourceTree = "<group>"; };
@@ -1471,6 +1473,7 @@
 			isa = PBXGroup;
 			children = (
 				DA7D0C000000000000000001 /* DockPreviews.swift */,
+				DA7D0C000000000000000007 /* DockPreviewShortcuts.swift */,
 				DA7D0C000000000000000003 /* DockGeometry.swift */,
 				DA7D0C000000000000000005 /* DockAltTabActions.swift */,
 			);
@@ -2647,6 +2650,7 @@
 				D04BADCDA9F9A6C3D6499877 /* SystemPermissions.swift in Sources */,
 				D04BABEECBC6D922298BC93A /* Spaces.swift in Sources */,
 				DA7D0C000000000000000002 /* DockPreviews.swift in Sources */,
+				DA7D0C000000000000000008 /* DockPreviewShortcuts.swift in Sources */,
 				DA7D0C000000000000000004 /* DockGeometry.swift in Sources */,
 				DA7D0C000000000000000006 /* DockAltTabActions.swift in Sources */,
 				D04BA6187A91A847844B6ABB /* Window.swift in Sources */,

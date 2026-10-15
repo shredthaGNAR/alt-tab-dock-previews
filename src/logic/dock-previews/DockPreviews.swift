@@ -22,6 +22,7 @@ class DockPreviews {
         guard let eventTap else { return Logger.error { "Failed to create the Dock previews event tap" } }
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, eventTap, 0), .commonModes)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(activeSpaceChanged), name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        DockPreviewShortcuts.observe()
         toggle(Preferences.dockPreviewsEnabled)
     }
 
@@ -120,6 +121,8 @@ class DockPreviews {
         cancelWindowPreview()
         shownIconFrame = DockGeometry.cocoaRect(iconFrame)
         DockAltTabActions.showApp(app, DockGeometry.previewAnchor(iconFrame, isPointerOnDock), DockGeometry.position.rawValue)
+        DockPreviewShortcuts.toggle(isShowingDockPreview)
+        if isShowingDockPreview { DockPreviewFocus.take() }
     }
 
     private static func pointerOnTilesPanel() {
@@ -144,8 +147,10 @@ class DockPreviews {
     private static func hide() {
         cancelWindowPreview()
         shownIconFrame = nil
-        guard isShowingDockPreview else { return }
+        DockPreviewShortcuts.toggle(false)
+        guard isShowingDockPreview else { return DockPreviewFocus.giveBackIfStillFrontmost() }
         DockAltTabActions.hide()
+        DockPreviewFocus.giveBack()
     }
 
     private static func releaseDockAutohideIfPointerStaysAway() {
@@ -184,10 +189,11 @@ class DockPreviews {
     private static func handleMouseDown(_ type: CGEventType, _ cgEvent: CGEvent) -> Unmanaged<CGEvent>? {
         clickTarget = nil
         guard !isShowingRegularUi, let item = DockItem.under(cgEvent.location), let app = item.runningApp else { return Unmanaged.passUnretained(cgEvent) }
+        let wasActive = app.processIdentifier == DockPreviewFocus.effectiveFrontmostApp?.processIdentifier
         hide()
         guard type == .leftMouseDown, Preferences.dockPreviewsClickToggles, !hasModifiers(cgEvent), !item.isShowingMenu,
               DockAltTabActions.windowStats(app.processIdentifier).all > 0 else { return Unmanaged.passUnretained(cgEvent) }
-        clickTarget = (app.bundleIdentifier, app.isActive)
+        clickTarget = (app.bundleIdentifier, wasActive)
         return nil
     }
 
@@ -195,8 +201,8 @@ class DockPreviews {
     private static func handleLeftMouseUp(_ cgEvent: CGEvent) -> Unmanaged<CGEvent>? {
         guard let target = clickTarget else { return Unmanaged.passUnretained(cgEvent) }
         clickTarget = nil
-        guard let app = DockItem.under(cgEvent.location)?.runningApp, app.bundleIdentifier == target.bundleId, app.isActive == target.wasActive else { return nil }
-        DockClick.toggle(app)
+        guard let app = DockItem.under(cgEvent.location)?.runningApp, app.bundleIdentifier == target.bundleId else { return nil }
+        DockClick.toggle(app, target.wasActive)
         return nil
     }
 
@@ -221,11 +227,11 @@ class DockPreviews {
 
 /// Windows-like Dock clicks: activate, or hide if already active; never switch Space to reach an app's windows
 private enum DockClick {
-    static func toggle(_ app: NSRunningApplication) {
+    static func toggle(_ app: NSRunningApplication, _ wasActive: Bool) {
         let stats = DockAltTabActions.windowStats(app.processIdentifier)
         if stats.currentSpace == 0 { return toggleWithWindowsOnOtherSpaces(app) }
         if stats.currentSpace == 1 && stats.minimizedCurrentSpace == 1 { return deminimize(app) }
-        guard app.isActive else { return activate(app) }
+        guard wasActive else { return activate(app) }
         app.hide()
     }
 
@@ -251,10 +257,6 @@ private enum DockClick {
     }
 
     static func activate(_ app: NSRunningApplication) {
-        if #available(macOS 14.0, *) {
-            app.activate(from: NSWorkspace.shared.frontmostApplication ?? NSRunningApplication.current, options: [])
-        } else {
-            app.activate(options: .activateIgnoringOtherApps)
-        }
+        DockPreviewFocus.activate(app)
     }
 }

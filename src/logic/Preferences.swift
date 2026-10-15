@@ -55,6 +55,7 @@ class Preferences {
             "dockPreviewsClickToggles": "true",
             "dockPreviewsKeepDockShowing": "true",
             "dockPreviewsWindowPreviewDelay": "500",
+            "dockPreviewsActivateAltTab": "false",
         ]
         (0..<maxShortcutCount).forEach { index in
             values[indexToName("holdShortcut", index)] = defaultShortcut("⌥")
@@ -127,6 +128,7 @@ class Preferences {
     static var dockPreviewsClickToggles: Bool { CachedUserDefaults.bool("dockPreviewsClickToggles") }
     static var dockPreviewsKeepDockShowing: Bool { CachedUserDefaults.bool("dockPreviewsKeepDockShowing") }
     static var dockPreviewsWindowPreviewDelay: Int { CachedUserDefaults.int("dockPreviewsWindowPreviewDelay") }
+    static var dockPreviewsActivateAltTab: Bool { CachedUserDefaults.bool("dockPreviewsActivateAltTab") }
 
     // macro values
     static var appearanceStyle: AppearanceStylePreference { CachedUserDefaults.macroPref("appearanceStyle", AppearanceStylePreference.allCases) }
