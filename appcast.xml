@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>AltTab Dock Previews</title>
+    <link>https://shredthagnar.github.io/alt-tab-dock-previews/appcast.xml</link>
+    <description>Update feed for AltTab Dock Previews. No updates are published here yet; new versions are on the GitHub releases page.</description>
+    <language>en</language>
+  </channel>
+</rss>
