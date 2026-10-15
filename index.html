@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AltTab Dock Previews</title>
-<meta name="description" content="Window previews for your macOS Dock, built into AltTab. One app instead of AltTab plus DockAltTab.">
+<meta name="description" content="A great app switcher and Dock window previews in one free Mac app. Open the DMG, drag it to Applications, done. 100% free, always.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%230a84ff'/%3E%3Crect x='14' y='18' width='16' height='12' rx='3' fill='white'/%3E%3Crect x='34' y='18' width='16' height='12' rx='3' fill='white' opacity='.7'/%3E%3Crect x='14' y='40' width='36' height='8' rx='4' fill='white' opacity='.9'/%3E%3C/svg%3E">
 <style>
@@ -193,7 +193,9 @@ section p.sub { color: var(--muted); font-size: 18px; margin: 0 0 36px; max-widt
 .copy { position: absolute; top: 8px; right: 8px; font: 12px/1 inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
 .note { font-size: 14px; color: var(--muted); margin-top: 10px; }
 .requirements { color: var(--muted); font-size: 14px; margin: 14px 0 0; }
-.subhead { font-size: 22px; letter-spacing: -0.01em; margin: 48px 0 8px; }
+.dev { margin-top: 40px; border-top: 1px solid var(--border); padding-top: 20px; }
+.dev summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+.dev p { color: var(--muted); }
 .step p + p { margin-top: -2px; }
 
 .settings { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
@@ -231,9 +233,9 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: 
 
 <main>
   <div class="wrap hero">
-    <span class="eyebrow">AltTab + DockAltTab, in one app</span>
-    <h1>Window previews for your Dock.</h1>
-    <p class="lede">Hover any running app in the macOS Dock to see its windows, just like on Windows. It's built straight into AltTab, so there's no second app to run.</p>
+    <span class="eyebrow">2 apps in 1 · 100% free, always</span>
+    <h1>Two great apps. One free download.</h1>
+    <p class="lede">A powerful app switcher plus window previews for your Dock, together in one app. Open the DMG, drag it to Applications, and you're done. No building, no coding.</p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/shredthaGNAR/alt-tab-dock-previews/releases/latest/download/AltTab-Dock-Previews.dmg">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
@@ -244,7 +246,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: 
         View on GitHub
       </a>
     </div>
-    <p class="requirements">macOS 12 or later · Apple silicon and Intel · Free and open source</p>
+    <p class="requirements">macOS 12 or later · Apple silicon and Intel · 100% free and open source, always</p>
 
     <div class="stage" aria-hidden="true">
       <div class="desktop" id="desktop">
@@ -265,27 +267,26 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: 
 
   <section id="why">
     <div class="wrap">
-      <h2>One app instead of two.</h2>
-      <p class="sub">DockAltTab used to drive a special build of AltTab from the outside, sending it AppleScript commands as your pointer moved. This build moves DockAltTab's logic inside AltTab itself.</p>
+      <h2>Two apps in one. Completely free.</h2>
+      <p class="sub">You used to need two apps for this: AltTab to switch between windows and DockAltTab for Dock previews. Now it's a single app that does both. There's nothing to pay for, now or ever.</p>
       <div class="compare">
         <div class="card">
           <span class="tag">Before</span>
-          <h3>AltTab + DockAltTab</h3>
+          <h3>Two separate apps</h3>
           <ul>
-            <li>Two apps to install, update and grant permissions to</li>
-            <li>Every hover sent an AppleScript command to AltTab</li>
-            <li>Window counts polled over AppleScript every 1–2 seconds</li>
-            <li>Hovering an app with nothing to show could crash AltTab</li>
+            <li>Two apps to download, install and keep up to date</li>
+            <li>Two sets of permissions to grant</li>
+            <li>Both had to be running for Dock previews to work</li>
           </ul>
         </div>
         <div class="card after">
           <span class="tag">Now</span>
-          <h3>AltTab Dock Previews</h3>
+          <h3>One app, both features</h3>
           <ul>
-            <li>One app with one set of permissions</li>
-            <li>Previews are shown directly, with no AppleScript in between</li>
-            <li>Window counts read the moment you click</li>
-            <li>Only the Dock is queried, so a frozen app can't stall it</li>
+            <li>One download and one app in your Applications folder</li>
+            <li>One set of permissions</li>
+            <li>The app switcher and Dock previews work together out of the box</li>
+            <li>100% free and open source, and it always will be</li>
           </ul>
         </div>
       </div>
@@ -295,7 +296,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: 
   <section id="features" style="padding-top:0">
     <div class="wrap">
       <h2>What it does.</h2>
-      <p class="sub">Everything you know from AltTab, plus the Dock behaviour from DockAltTab.</p>
+      <p class="sub">Everything AltTab does as an app switcher, plus window previews for your Dock.</p>
       <div class="grid">
         <div class="card feature">
           <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="8" height="6" rx="1.5"/><rect x="13" y="4" width="8" height="6" rx="1.5"/><rect x="6" y="15" width="12" height="5" rx="2.5"/></svg></div>
@@ -333,30 +334,43 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: 
 
   <section id="install" style="padding-top:0">
     <div class="wrap">
-      <h2>Install.</h2>
-      <p class="sub">Download the DMG and drag AltTab into Applications. The app isn't notarized by Apple, so macOS asks you to approve it the first time you open it.</p>
+      <h2>Install it like any other app.</h2>
+      <p class="sub">No building, no Terminal, no coding. Open the DMG and drag AltTab into your Applications folder, just like any other Mac app.</p>
       <div class="steps">
         <div class="step">
-          <h3>Download and drag to Applications</h3>
-          <p>Quit DockAltTab and any other copy of AltTab first. Open <a href="https://github.com/shredthaGNAR/alt-tab-dock-previews/releases/latest/download/AltTab-Dock-Previews.dmg">AltTab-Dock-Previews.dmg</a> and drag AltTab onto the Applications folder. If you already have AltTab there, choose Replace.</p>
+          <h3>Download</h3>
+          <p>Get <a href="https://github.com/shredthaGNAR/alt-tab-dock-previews/releases/latest/download/AltTab-Dock-Previews.dmg">AltTab-Dock-Previews.dmg</a> and open it.</p>
         </div>
         <div class="step">
-          <h3>Approve it the first time</h3>
-          <p><strong>macOS 15 Sequoia or later:</strong> open AltTab, and when macOS says it can't verify it, click Done. Then go to System Settings → Privacy &amp; Security, scroll down, click <em>Open Anyway</em> next to AltTab, and confirm.</p>
+          <h3>Drag AltTab into Applications</h3>
+          <p>Drag the AltTab icon onto the Applications folder in the window that opens. If you already use AltTab or DockAltTab, quit them first, and choose Replace if asked.</p>
+        </div>
+        <div class="step">
+          <h3>Open it (one extra click the first time)</h3>
+          <p>AltTab isn't notarized by Apple, which requires a paid developer account, so macOS asks you to approve it once:</p>
+          <p><strong>macOS 15 Sequoia or later:</strong> open AltTab and click Done on the warning. Then go to System Settings → Privacy &amp; Security, scroll down, and click <em>Open Anyway</em> next to AltTab.</p>
           <p><strong>macOS 14 Sonoma or earlier:</strong> Control-click AltTab in Applications, choose Open, then click Open.</p>
         </div>
         <div class="step">
           <h3>Allow permissions</h3>
-          <p>AltTab asks for Accessibility and Screen Recording. Allow both, then relaunch AltTab if it asks. If an older AltTab is already in the Accessibility list, remove it with the minus button first.</p>
+          <p>AltTab asks for Accessibility and Screen Recording so it can see and switch your windows. Allow both, and you're set.</p>
         </div>
       </div>
+      <div class="cta" style="justify-content:flex-start;margin-top:28px">
+        <a class="btn primary" href="https://github.com/shredthaGNAR/alt-tab-dock-previews/releases/latest/download/AltTab-Dock-Previews.dmg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          Download for macOS, free
+        </a>
+      </div>
 
-      <h3 class="subhead">Build from source</h3>
-      <p class="sub">With Xcode installed, you can build the same DMG yourself. It takes a few minutes and doesn't need an Apple developer certificate.</p>
-      <div class="code"><pre>git clone -b dock-previews https://github.com/shredthaGNAR/alt-tab-dock-previews.git
+      <details class="dev">
+        <summary>For developers: build it from source</summary>
+        <p>You don't need this to use the app. If you'd rather build the DMG yourself, you'll need Xcode; no Apple developer certificate is required.</p>
+        <div class="code"><pre>git clone -b dock-previews https://github.com/shredthaGNAR/alt-tab-dock-previews.git
 cd alt-tab-dock-previews
 scripts/make_dmg.sh</pre><button class="copy" type="button">Copy</button></div>
-      <p class="note">The DMG is written to <code>dist/AltTab-Dock-Previews.dmg</code>.</p>
+        <p class="note">The DMG is written to <code>dist/AltTab-Dock-Previews.dmg</code>.</p>
+      </details>
     </div>
   </section>
 
